@@ -189,7 +189,7 @@ interface AbgWebResponse {
 }
 
 /**
- * `ctx.webserver` (`@deepseek-ai/dsh-host-webserver`), a subset: named route
+ * `ctx.webServer` (`@deepseek-ai/dsh-host-webserver`), a subset: named route
  * registration. Duplicate (kind, path) throws, and the returned disposer removes
  * the route. Paths under `/api` are behind the deployment's browser-trust fence.
  */
@@ -211,7 +211,7 @@ interface AbgContext {
   fs?: AbgFileSystemService
   on(name: string, listener: (...args: any[]) => any, options?: { global?: boolean }): () => void
   get?(name: string): unknown
-  webserver?: AbgWebServerService
+  webServer?: AbgWebServerService
   inject?(services: readonly string[], callback: (scoped: AbgContext) => void): void
   effect?(action: () => (() => void) | void, label?: string): () => void
 }

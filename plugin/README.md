@@ -231,6 +231,22 @@ enforced rule) are reported as `promptUnchecked` with
 `abg.prompt_override_applied`. A user-edited prompt is therefore never presented
 as an audited one.
 
+### Web GUI panel
+
+Installed into a Web profile, ABG adds one sidebar entry whose panel shows the
+mount record, `degraded[]`, the compatibility verdict, `PROMPT_VERSION`, and the
+diagnostic ring. It reads the host route `/api/abg/status` — the same JSON
+contract as `abg_status` and the diagnostics mirror — behind the deployment's
+`/api` browser-trust fence, so there is no separate RPC surface to secure.
+
+The browser half is `lib/client.js` and is **hand-authored**: a DSH client plugin
+normally ships a bundle produced by the host monorepo's build, and no public
+out-of-tree build exists, so it is written directly against the lazy-CJS envelope
+(`window.__ModuleLoader__.load({id, factory})`, baseline `require`) and the slot
+registry (`inject = ['slots']`; `ctx.slots.inject` / `register`). It is excluded
+from `tsc` for the same reason first-party built client artifacts are. Edit it and
+re-install the plugin into the profile — there is no build step.
+
 ### Diagnostics mirror (opt-in)
 
 `diagnosticsExport.file` writes a bounded JSON snapshot — mount record, status

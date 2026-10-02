@@ -110,6 +110,18 @@ If you *want* to test the gates themselves, set `policy: ask` or `deny` and
 `requireBeforeMutation: true`, and record what happened — that is the behaviour
 the project most needs evidence about.
 
+### Seeing it in the Web GUI
+
+In a **Web** profile, ABG adds a sidebar entry (the ◆ mark, labelled **ABG**).
+The panel is read-only: mount state, enabled modules, the host-compatibility
+verdict, `PROMPT_VERSION`, whether your prompt override is in force, and the
+diagnostic ring. It reads `/api/abg/status`; if the panel says the status is
+unavailable, the plugin's host half is not mounted in this profile — check with
+`./scripts/check-install.sh <profile>`.
+
+The panel is the fastest way to answer "is ABG even doing anything?", which is
+otherwise indistinguishable from silence.
+
 ## 4. What a useful trial looks like
 
 1. **Run one real task** with ABG enabled, in a copy of a workspace you can lose.

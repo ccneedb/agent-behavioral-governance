@@ -103,9 +103,9 @@ function stubContext() {
     /** Simulate the web server becoming available (the Web GUI composition). */
     mountWebserver: () => {
       for (const injection of injections) {
-        if (injection.services.includes('webserver')) {
+        if (injection.services.includes('webServer')) {
           injection.callback({
-            webserver: {
+            webServer: {
               register: (/** @type {any} */ route) => {
                 routes.push(route)
                 return () => {}
@@ -154,7 +154,7 @@ test('ABG requests the tool registry through ctx.inject, not eagerly', () => {
 
   assert.deepEqual(
     stub.injections.map((injection) => injection.services.join(',')).sort(),
-    ['tools', 'webserver'],
+    ['tools', 'webServer'],
     'every optional service is requested through ctx.inject, never read eagerly',
   )
   assert.equal(stub.guards.length, 0, 'no guard before the registry exists')

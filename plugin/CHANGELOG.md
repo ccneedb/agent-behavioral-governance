@@ -52,6 +52,29 @@ generated section) and an empty `diagnosticsExport.file` means no file I/O.
   explicit re-entrancy guard because the report itself records a diagnostic.
 - Three new diagnostic codes for the above, and two more for the mirror.
 
+- **Web GUI panel** (`lib/client.js`, `plugin/lib/` host route; `ARCHITECTURE-SPEC`
+  §28.8). A sidebar entry opens a read-only panel showing the mount record,
+  `degraded[]`, the compatibility verdict, `PROMPT_VERSION`, and the diagnostic
+  ring, read from the new host route `/api/abg/status` (behind the deployment's
+  `/api` browser-trust fence). The client bundle is **hand-authored**: a DSH
+  client plugin normally ships a `lib/client.js` built by the monorepo, and there
+  is no public out-of-tree build, so it is written directly against the lazy-CJS
+  envelope and the slot registry. Verified end to end in an isolated web profile.
+- The GUI route records its own outcome in-band (`abg.gui_route_registered`, or
+  `abg.capability_missing` when no web server is mounted), because an `inject`
+  that never fires otherwise looks exactly like a route that does not exist.
+
+### Fixed
+
+- **The diagnostics mirror showed an empty ring.** The setup flush happened before
+  the mount records existed and the throttle then suppressed them, so the file was
+  written once, empty, and never refreshed until the next diagnostic. A final
+  forced flush at mount fixes it; caught by the web-profile verification, which is
+  the first run where the mirror was read by something other than its own tests.
+- **The web server service is `webServer`, not `webserver`.** The first GUI route
+  attempt injected the wrong name, so the route was never registered — silently,
+  because an unfired `inject` reports nothing. Caught by the same verification.
+
 ### Changed
 
 - **Package version is now `0.4.0`.** For a default configuration the compiled

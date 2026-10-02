@@ -1388,6 +1388,43 @@ Constraints, in the order they matter:
 The writer is injected into the kernel module, so throttling, bounding, and the
 failure path are unit-tested without touching a filesystem.
 
+### 28.8 Web GUI panel and its data route (v0.4.0)
+
+ABG ships a browser half so an operator can see governance state without reading
+a transcript or calling a tool. Verified end to end in a workspace-local web
+profile (never the live profile): the sidebar entry registers, the panel opens,
+and it renders the mount record, the status line, and the diagnostic ring.
+
+**Data path.** The host registers one exact route on `ctx.webServer`
+(`@deepseek-ai/dsh-host-webserver`), `STATUS_ROUTE_PATH = /api/abg/status`,
+returning the same JSON contract as `abg_status` and the diagnostics mirror, so
+all three front ends read one shape. The route sits under `/api`, i.e. behind the
+deployment's browser-trust fence, is registered in its own guarded step through
+`ctx.inject(['webServer'])`, and leaves no response open on failure. An absent
+web server is an optional seam, not a degradation — but the *absence of the
+route* is recorded in-band (`abg.gui_route_registered` when it registers,
+`abg.capability_missing` when the service is missing), because an `inject` that
+never fires is otherwise indistinguishable from a route that does.
+
+**Client bundle — hand-authored, and why.** A DSH client plugin is a package
+`dsh.client{platform:'web'}` declaration plus a `./client` export, and the host
+fails activation loudly when the bundle is missing. First-party packages ship a
+`lib/client.js` produced by the monorepo's `pnpm run build` (tsdown); there is no
+public out-of-tree build. `plugin/lib/client.js` is therefore written directly
+against the two documented contracts: the lazy-CJS envelope
+`window.__ModuleLoader__.load({id, factory})` whose `require` resolves only the
+frozen baseline, and the slot registry (`inject = ['slots']`,
+`ctx.slots.inject('sidebar.panellist' | 'main', …)`, `ctx.slots.register({…}, C)`).
+It registers one panel identity in two seats. It is excluded from `tsc` for the
+same reason first-party built client artifacts are: it is a browser artifact, not
+Node source.
+
+**Consequence for this project's properties.** The Node half still imports
+nothing first-party; `dsh.client.inject` names package *rows*, not Node imports.
+The cost is real and recorded: the bundle is coupled to this host version and must
+be re-verified against any new release, which the acceptance matrix covers by
+running the web-profile check.
+
 ## 29. Compatibility Adapter Specification
 
 ### 29.1 Problem

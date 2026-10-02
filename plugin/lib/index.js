@@ -490,7 +490,12 @@ export function apply(ctx, rawConfig) {
     guarded('diagnosticsExport', () => {
       exporter.flush(true)
     })
-    guarded('dispose.diagnosticsExport', () => {
+    guarded('diagnosticsExport.mount', () => {
+    // The setup flush happens before the mount records exist, and the throttle
+    // then suppresses them, so the mirror would otherwise show an empty ring.
+    exporter.flush(true)
+  })
+  guarded('dispose.diagnosticsExport', () => {
       ctx.effect?.(() => () => {
         exporter.close()
       }, 'abg: stop mirroring diagnostics')
@@ -884,9 +889,16 @@ export function apply(ctx, rawConfig) {
   // read one contract. Optional seam: a headless composition simply has no
   // webserver, and its absence is not a degradation.
   if (config.gui.enabled) {
-    ctx.inject?.(['webserver'], (webCtx) => {
+    ctx.inject?.(['webServer'], (webCtx) => {
+      // In-band evidence either way: an `inject` that never fires leaves no
+      // trace at all, which is exactly the ambiguity this branch removes.
+      const webServer = webCtx.webServer
+      if (webServer === undefined) {
+        noteMissing('webServer')
+        return
+      }
       guarded('webserver.route', () => {
-        const dispose = webCtx.webserver?.register({
+        const dispose = webServer.register({
           kind: 'exact',
           path: STATUS_ROUTE_PATH,
           handler: (_req, res) => {
@@ -912,6 +924,11 @@ export function apply(ctx, rawConfig) {
             }
           },
         })
+        note(
+          'abg.gui_route_registered',
+          { path: STATUS_ROUTE_PATH, kind: 'exact' },
+          `abg: gui_route_registered path=${STATUS_ROUTE_PATH}`,
+        )
         if (typeof dispose === 'function') {
           ctx.effect?.(() => dispose, 'abg: remove the GUI status route')
         }
