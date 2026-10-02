@@ -135,6 +135,14 @@ it needs.
       tokenEnvVar: ABG_GITHUB_TOKEN # read from the environment, only in `api` mode
       labels: [feedback]
       includeDiagnostics: true
+    prompt:
+      mode: compiled              # compiled | append | replace
+      append: ""                  # extra guidance, appended to the compiled section
+      file: ""                    # markdown file, used when mode is `replace`
+      allowOverBudget: false      # accept text over the §11 ceiling, deliberately
+    diagnosticsExport:
+      file: ""                    # empty = off; no file I/O unless configured
+      limit: 50
 ```
 
 Defaults are non-intrusive: `requireBeforeMutation` is `false` and the
@@ -196,6 +204,41 @@ degrade into something the transcript can show rather than into a silent absence
   distinguishable from "ABG is complete" — read `degraded`, not `mounted` alone;
 - **log narration is best-effort**: a logger that throws cannot unmount ABG,
   because the ring, the status line, and the tools carry the state.
+
+### Editable prompt
+
+The compiled governance section is generated **and audited** (dedupe, content
+rules, byte ceiling). `prompt.mode` lets a deployment change that text on its own
+terms:
+
+| Mode | Effect |
+|---|---|
+| `compiled` (default) | the audited generated section, unchanged |
+| `append` | the compiled section plus your guidance (`prompt.append`) |
+| `replace` | `prompt.file` becomes the section verbatim |
+
+Two requirements are still enforced, because they are mechanisms rather than
+style: no `{{ }}` interpolation syntax, and the byte ceiling unless
+`prompt.allowOverBudget: true` is set deliberately. A refused edit **keeps the
+compiled default and says why** (`abg.prompt_override_rejected` /
+`abg.prompt_override_missing` in the diagnostic ring) — it never mounts inert and
+never silently ignores your text. An applied edit is versioned
+`PROMPT_VERSION+user:<hash>` so a behavioural claim still names one text.
+
+The conformance invariants that cannot be checked on arbitrary text (no duplicated
+statements, no authority claim, no implementation leakage, no restating an
+enforced rule) are reported as `promptUnchecked` with
+`abg.prompt_override_applied`. A user-edited prompt is therefore never presented
+as an audited one.
+
+### Diagnostics mirror (opt-in)
+
+`diagnosticsExport.file` writes a bounded JSON snapshot — mount record, status
+line, counts, and the newest `limit` diagnostics — for a front end that cannot
+read the in-process ring. It is **off by default** (an empty path means no file
+I/O at all), throttled to one write per 500 ms, written via a temporary file and
+rename, and fails open: an unwritable path is reported once per window as
+`abg.diagnostics_export_failed` and never affects enforcement.
 
 ## Verification
 

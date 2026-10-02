@@ -98,4 +98,19 @@
           labels:
             - feedback
           includeDiagnostics: true
+        # User-editable prompt. `compiled` (default) uses the audited generated
+        # section; `append` adds guidance; `replace` reads `file` verbatim. A
+        # `{{ }}` in the text, or exceeding the byte ceiling without
+        # `allowOverBudget`, is refused and the compiled default is kept — the
+        # refusal is reported as abg.prompt_override_rejected.
+        prompt:
+          mode: compiled
+          append: ""
+          file: ""
+          allowOverBudget: false
+        # Opt-in diagnostics mirror for a front end that cannot read the
+        # in-process ring. Empty `file` means no file I/O at all.
+        diagnosticsExport:
+          file: ""
+          limit: 50
         diagnostics: true

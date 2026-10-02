@@ -22,6 +22,43 @@ the governance state `DOMAIN_VERSION` (§22.3).
 > for volunteer testing** (a tag plus a packed tarball), not as an npm package:
 > the `0.1.0`/`0.2.0` entries below stay staged under **Unreleased**.
 
+## [0.4.0] — 2026-10-02
+
+Adds the two capabilities a front end needs: a user-editable prompt and a
+machine-readable diagnostics mirror. Neither is on by default in a way that
+changes existing behaviour: `prompt.mode` defaults to `compiled` (the audited
+generated section) and an empty `diagnosticsExport.file` means no file I/O.
+
+### Added
+
+- **User-editable prompt** (`lib/kernel/prompt-override.js`; `prompt{mode, append,
+  file, allowOverBudget}`; `ARCHITECTURE-SPEC` §27.1). `append` adds guidance to
+  the audited compiled section; `replace` substitutes a markdown file wholesale.
+  Two hard requirements are enforced on any user text — no `{{ }}` interpolation
+  syntax, and the §11 byte ceiling unless `allowOverBudget` is set deliberately —
+  and a refused edit **falls back to the compiled default and reports why**
+  (`abg.prompt_override_rejected` / `abg.prompt_override_missing`) rather than
+  mounting inert or silently ignoring the text. An applied edit is attributed as
+  `PROMPT_VERSION+user:<hash>`, and the soft invariants the conformance suite
+  cannot check on user text (dedupe, no authority claim, no implementation
+  leakage, no restating an enforced rule) are returned as `promptUnchecked` and
+  reported, so a user-edited prompt is never presented as an audited one.
+- **Opt-in diagnostics mirror** (`lib/kernel/export.js`;
+  `diagnosticsExport{file, limit}`; `ARCHITECTURE-SPEC` §28.7). Writes a bounded
+  JSON snapshot (mount record, status line, counts, newest `limit` diagnostics)
+  for a front end that cannot read the in-process ring. Off unless a path is
+  configured; throttled while diagnostics stream; written via a temporary file
+  and rename; and fail-open with the failure reported once per window, with an
+  explicit re-entrancy guard because the report itself records a diagnostic.
+- Three new diagnostic codes for the above, and two more for the mirror.
+
+### Changed
+
+- **Package version is now `0.4.0`.** For a default configuration the compiled
+  section is byte-identical to `0.3.0`, so `PROMPT_VERSION` remains `0.2.0`
+  unless a deployment applies an override, in which case it becomes
+  `0.2.0+user:<hash>`.
+
 ## [0.3.0] — 2026-10-02
 
 Adds the volunteer-facing surface: a way to obtain the plugin, and a one-step

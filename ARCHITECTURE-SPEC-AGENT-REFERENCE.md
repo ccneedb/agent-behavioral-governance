@@ -1,9 +1,9 @@
 ---
 doc_type: architecture-spec
 project: agent-behavioral-governance
-version: 0.5.0
+version: 0.6.0
 status: finalized-for-agent-handoff
-revision: d13-amendment-b6-budget-and-26.2-mount-hardening
+revision: editable-prompt-and-diagnostics-mirror
 part_a: verified-host-integration-and-prototype-0.1.0
 part_b: target-design-abg-0.2.0
 part_b_status: implemented-through-the-0.2.0-structural-round; model-backed-gates-c-d-e-pending
@@ -1203,6 +1203,40 @@ diagnostic, and no context contribution is produced.
   restatement of a deterministically enforced rule, and the byte budget. It is
   updated to the four-module set.
 
+### 27.1 User-editable prompt (v0.4.0)
+
+The compiled section is generated and **audited**: the conformance suite enforces
+§5.2 deduplication, the §10 content rules (no authority claim, no implementation
+leakage, no restatement of an enforced rule), and the §11 byte budget. A user who
+wants different wording is asking to trade some of that for flexibility, which is
+a legitimate request — provided the trade is explicit and attributable.
+
+Three modes, strictly validated (`prompt{mode, append, file, allowOverBudget}`):
+
+| Mode | Effect | Guarantees |
+|---|---|---|
+| `compiled` (default) | the audited generated section | all of them |
+| `append` | the compiled section plus guidance | hard requirements + dedupe risk reported |
+| `replace` | a markdown file becomes the section | hard requirements only |
+
+**Hard requirements** (refused, with the compiled default kept and the reason
+reported as `abg.prompt_override_rejected`): `{{ }}` interpolation syntax, which
+is a host-assembly hazard since the section is registered with
+`interpolate: false`; and exceeding `DEFAULT_MAX_PROMPT_BYTES` unless
+`prompt.allowOverBudget` is set deliberately, in which case the excess is still
+reported. An unreadable `prompt.file` is not fatal: it degrades to the compiled
+default with `abg.prompt_override_missing`.
+
+**Attribution.** An applied edit yields `PROMPT_VERSION + "+user:" + hash`, so a
+behavioural claim still names exactly one text (PR-07).
+
+**Honesty about what is no longer checked.** The soft invariants cannot be
+verified on arbitrary user text. They are returned as `promptUnchecked`
+(`UNCHECKED_INVARIANTS`) and recorded with `abg.prompt_override_applied`, so no
+front end may present a user-edited prompt as an audited one. This is the
+mechanism by which the GUI can offer free editing without the project claiming a
+guarantee it cannot make.
+
 ## 28. Diagnosability Specification
 
 ### 28.1 Problem
@@ -1231,6 +1265,8 @@ Codes (`§12`'s vocabulary, made concrete):
 abg.mount  abg.config_invalid  abg.capability_missing
 abg.module_enabled  abg.module_conflict
 abg.host_compatibility  abg.prompt_assembly
+abg.prompt_override_applied  abg.prompt_override_rejected  abg.prompt_override_missing
+abg.diagnostics_export_failed
 abg.orientation_recorded  abg.orientation_restored  abg.orientation_required
 abg.question_registered  abg.question_batch_created  abg.question_deferred
 abg.question_submitted  abg.question_batch_blocked  abg.question_redundant
@@ -1325,6 +1361,32 @@ payload is bounded at 6,000 bytes and says so rather than emitting a mangled
 link), `url` mode making zero network calls, `api` mode filing exactly once and
 reporting the issue URL, and fail-open on a rejected or broken API. The
 installed-artifact proof in `verify.sh` asserts the tool is registered.
+
+### 28.7 Opt-in diagnostics mirror (v0.4.0)
+
+The ring of §28.3 lives inside the running host process; a separate front end —
+the Web GUI panel, a terminal, a bug report — cannot read it, which is why
+`abg_status` exists as a tool. This section adds the machine-readable half for
+front ends: `diagnosticsExport{file, limit}` mirrors a bounded snapshot (mount
+record, status line, counts, and the newest `limit` diagnostics) to a JSON file
+the deployment names.
+
+Constraints, in the order they matter:
+
+- **off by default** — an empty `file` means no file I/O at all, so the plugin's
+  side-effect-free property holds unless a deployment asks for the mirror;
+- **bounded** — at most `limit` entries (1..200), newest first, plus a `schema`
+  version and a timestamp so a reader can refuse a stale file;
+- **throttled** — at most one write per 500 ms while diagnostics stream, with an
+  explicit forced flush at mount and on disposal;
+- **fail open, no recursion** — a write failure is reported once per window as
+  `abg.diagnostics_export_failed`, and re-entrancy is blocked explicitly because
+  that report is itself a diagnostic;
+- **atomic-ish** — written to `<file>.tmp` and renamed, so a reader never sees a
+  half-written document.
+
+The writer is injected into the kernel module, so throttling, bounding, and the
+failure path are unit-tested without touching a filesystem.
 
 ## 29. Compatibility Adapter Specification
 

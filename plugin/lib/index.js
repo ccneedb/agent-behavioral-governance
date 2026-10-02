@@ -16,9 +16,14 @@
  * in any composition and immune to the profile's module-resolution layout.
  */
 
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+
 import { resolveConfig, DEFAULT_SECTION_ORDER } from './kernel/config.js'
 import { createRegistry } from './kernel/registry.js'
 import { compilePrompt, promptStats } from './kernel/prompt-compiler.js'
+import { composePromptOverride } from './kernel/prompt-override.js'
+import { createDiagnosticsExporter } from './kernel/export.js'
 import { projectGovernanceModule, createProjectState, evaluateOrientationGate } from './modules/project-governance.js'
 import { informationIntegrityModule } from './modules/information-integrity.js'
 import { userAttentionModule, createQuestionCollector } from './modules/user-attention.js'
@@ -77,7 +82,7 @@ export const PROMPT_VERSION = '0.2.0'
  * Declared here so a feedback report can name the build it came from without the
  * plugin reading the filesystem at runtime.
  */
-export const PLUGIN_VERSION = '0.3.0'
+export const PLUGIN_VERSION = '0.4.0'
 
 /**
  * Stable kernel invariants: the statements that hold regardless of which modules
@@ -122,24 +127,54 @@ export const MODULES = Object.freeze([
  * unit-testable.
  *
  * @param {unknown} [raw]
+ * @param {{ overrideText?: string }} [options] - replacement text for `prompt.mode: replace`.
  * @returns {{
  *   config: AbgConfig,
  *   registry: ReturnType<typeof createRegistry>,
  *   enabled: readonly GovernanceModule[],
  *   prompt: string,
  *   stats: { bytes: number, characters: number, lines: number },
+ *   promptIssues: string[],
+ *   promptOverridden: boolean,
+ *   promptUnchecked: string[],
+ *   promptVersion: string,
+ *   compiledBytes: number,
  * }}
  */
-export function buildGovernance(raw) {
+export function buildGovernance(raw, options = {}) {
   const config = resolveConfig(raw)
   const registry = createRegistry()
   for (const module of MODULES) registry.registerModule(module)
   registry.configure(config.modules)
 
   const enabled = registry.getEnabledModules()
-  const prompt = config.enabled ? compilePrompt({ kernelPrinciples: KERNEL_PRINCIPLES, modules: enabled }) : ''
+  const basePrompt = config.enabled ? compilePrompt({ kernelPrinciples: KERNEL_PRINCIPLES, modules: enabled }) : ''
+  const composed = config.enabled
+    ? composePromptOverride({
+        mode: config.prompt.mode,
+        append: config.prompt.append,
+        overrideText: options.overrideText,
+        basePrompt,
+        allowOverBudget: config.prompt.allowOverBudget,
+      })
+    : { text: '', applied: false, versionSuffix: '', issues: [], unchecked: [] }
 
-  return { config, registry, enabled, prompt, stats: promptStats(prompt) }
+  return {
+    config,
+    registry,
+    enabled,
+    prompt: composed.text,
+    stats: promptStats(composed.text),
+    /** Why a user prompt edit was refused or ignored; surfaced as diagnostics on mount. */
+    promptIssues: composed.issues,
+    promptOverridden: composed.applied,
+    /** Soft invariants that no longer apply once the text is user-authored. */
+    promptUnchecked: composed.unchecked,
+    /** `PROMPT_VERSION`, suffixed when a user edit is in force, so one text is one version. */
+    promptVersion: `${PROMPT_VERSION}${composed.versionSuffix}`,
+    /** Bytes of the audited compiled default, for a diff in any front end. */
+    compiledBytes: promptStats(basePrompt).bytes,
+  }
 }
 
 /**
@@ -223,6 +258,31 @@ function mountConfigFaultSurface(ctx, error) {
 }
 
 /**
+ * Read the replacement prompt file named by the raw configuration.
+ *
+ * Deliberately here, in the host-touching layer, rather than in the pure kernel:
+ * `buildGovernance()` stays free of I/O and unit-testable without a filesystem.
+ * An unreadable file is not fatal — the audited compiled default is used and the
+ * reason is reported as a diagnostic.
+ *
+ * @param {unknown} rawConfig
+ * @returns {{ text?: string, issue?: string }}
+ */
+function readPromptOverride(rawConfig) {
+  if (typeof rawConfig !== 'object' || rawConfig === null || Array.isArray(rawConfig)) return {}
+  const prompt = /** @type {{ prompt?: unknown }} */ (rawConfig).prompt
+  if (typeof prompt !== 'object' || prompt === null || Array.isArray(prompt)) return {}
+  const { mode, file } = /** @type {{ mode?: unknown, file?: unknown }} */ (prompt)
+  if (mode !== 'replace' || typeof file !== 'string' || file.trim() === '') return {}
+  try {
+    return { text: readFileSync(file, 'utf8') }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { issue: `prompt.file could not be read (${message}); the compiled default is in use` }
+  }
+}
+
+/**
  * Mount ABG.
  *
  * Contract (`ARCHITECTURE-SPEC` §26.2): **this function does not throw.**
@@ -237,8 +297,11 @@ function mountConfigFaultSurface(ctx, error) {
 export function apply(ctx, rawConfig) {
   /** @type {ReturnType<typeof buildGovernance>} */
   let kernel
+  let overrideIssue = ''
   try {
-    kernel = buildGovernance(rawConfig)
+    const override = readPromptOverride(rawConfig)
+    if (override.issue !== undefined) overrideIssue = override.issue
+    kernel = buildGovernance(rawConfig, { overrideText: override.text })
   } catch (error) {
     mountConfigFaultSurface(ctx, error)
     return
@@ -281,6 +344,9 @@ export function apply(ctx, rawConfig) {
    *   mounted: boolean,
    *   degraded: string[],
    *   promptVersion: string,
+   *   promptOverridden: boolean,
+   *   promptIssues: string[],
+   *   compiledPromptBytes: number,
    *   sectionName: string,
    *   sectionOrder: number,
    *   promptBytes: number,
@@ -290,7 +356,10 @@ export function apply(ctx, rawConfig) {
    * }} */ ({
     mounted: true,
     degraded: degradedCapabilities,
-    promptVersion: PROMPT_VERSION,
+    promptVersion: kernel.promptVersion,
+    promptOverridden: kernel.promptOverridden,
+    promptIssues: kernel.promptIssues,
+    compiledPromptBytes: kernel.compiledBytes,
     sectionName: SECTION_NAME,
     sectionOrder: config.sectionOrder,
     promptBytes: stats.bytes,
@@ -299,6 +368,9 @@ export function apply(ctx, rawConfig) {
     /** Replaced by the compatibility adapter's snapshot once it observes one. */
     compatibility: { verdict: 'PENDING', reasons: [] },
   })
+
+  /** Set once the exporter exists; `note()` calls it so every record can mirror. */
+  let flushExport = () => {}
 
   /**
    * Record one diagnostic and, when narration is enabled, keep the historical
@@ -312,6 +384,7 @@ export function apply(ctx, rawConfig) {
    */
   const note = (code, data, narration, level = 'info') => {
     diagnostics.record({ code, data })
+    flushExport()
     if (!config.diagnostics || narration === undefined) return
     // Log narration is best effort (§28.3 channel D): a deployment with a broken
     // or absent logger must still get the ring, the status line, and the tools.
@@ -356,6 +429,65 @@ export function apply(ctx, rawConfig) {
   const noteMissing = (capability) => {
     degradedCapabilities.push(capability)
     note('abg.capability_missing', { capability }, `abg: capability_missing ${capability}`, 'warn')
+  }
+
+  /* ── user-editable prompt (§27.1) ─────────────────────────────────────── */
+
+  // A refused or ignored user edit is a governance event, not a silent fallback:
+  // the deployment must be able to see that its text is not in force.
+  for (const issue of kernel.promptIssues) {
+    note('abg.prompt_override_rejected', { issue }, `abg: prompt_override_rejected ${issue}`, 'warn')
+  }
+  if (overrideIssue !== '') {
+    note('abg.prompt_override_missing', { issue: overrideIssue }, `abg: prompt_override_missing ${overrideIssue}`, 'warn')
+  }
+  if (kernel.promptOverridden) {
+    note(
+      'abg.prompt_override_applied',
+      { promptVersion: kernel.promptVersion, bytes: stats.bytes, unchecked: kernel.promptUnchecked },
+      `abg: prompt_override_applied version=${kernel.promptVersion} bytes=${stats.bytes} ` +
+        `unchecked=${kernel.promptUnchecked.length}`,
+      'warn',
+    )
+  }
+
+  /* ── opt-in diagnostics mirror (§28.7) ────────────────────────────────── */
+
+  // A front end cannot read the in-process ring; this mirrors it to a path the
+  // deployment chooses, at most once per interval, and only when asked for.
+  const exporter = createDiagnosticsExporter({
+    file: config.diagnosticsExport.file,
+    limit: config.diagnosticsExport.limit,
+    snapshot: () => ({
+      mount,
+      status_line: diagnostics.formatLine(),
+      counts: diagnostics.counts(),
+      diagnostics: diagnostics.recent(config.diagnosticsExport.limit),
+    }),
+    writeFile:
+      config.diagnosticsExport.file === ''
+        ? undefined
+        : (path, text) => {
+            mkdirSync(dirname(path), { recursive: true })
+            const temporary = `${path}.tmp`
+            writeFileSync(temporary, text)
+            renameSync(temporary, path)
+          },
+    onError: (message) =>
+      note('abg.diagnostics_export_failed', { message }, `abg: diagnostics_export_failed ${message}`, 'warn'),
+  })
+  if (exporter.file !== '') {
+    flushExport = () => {
+      exporter.flush()
+    }
+    guarded('diagnosticsExport', () => {
+      exporter.flush(true)
+    })
+    guarded('dispose.diagnosticsExport', () => {
+      ctx.effect?.(() => () => {
+        exporter.close()
+      }, 'abg: stop mirroring diagnostics')
+    })
   }
 
   /* ── compatibility adapter (Part B §29) ───────────────────────────────── */
@@ -719,7 +851,7 @@ export function apply(ctx, rawConfig) {
             mount,
             diagnostics,
             pluginVersion: PLUGIN_VERSION,
-            promptVersion: PROMPT_VERSION,
+            promptVersion: kernel.promptVersion,
           }),
         )
       })
@@ -750,7 +882,12 @@ export function apply(ctx, rawConfig) {
   // a partially registered plugin (Part B §26.1).
   note(
     'abg.mount',
-    { modules: enabled.map((module) => module.id), promptVersion: PROMPT_VERSION, promptBytes: stats.bytes },
+    {
+      modules: enabled.map((module) => module.id),
+      promptVersion: kernel.promptVersion,
+      promptOverridden: kernel.promptOverridden,
+      promptBytes: stats.bytes,
+    },
     `abg: governance mounted modules=${enabled.map((module) => module.id).join(',')} ` +
       `section=${SECTION_NAME}@${config.sectionOrder} bytes=${stats.bytes} ` +
       `workspace=${config.workspace.policy} gate=${config.preStep.orientationGate}`,

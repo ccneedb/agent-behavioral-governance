@@ -222,6 +222,21 @@ interface AbgFetch {
 
 declare const fetch: AbgFetch | undefined
 
+/**
+ * The filesystem slice the host layer (never the pure kernel) uses: reading a
+ * user-supplied prompt override, and writing the opt-in diagnostics export.
+ */
+declare module 'node:path' {
+  export function dirname(path: string): string
+}
+
+declare module 'node:fs' {
+  export function readFileSync(path: string, encoding: 'utf8'): string
+  export function writeFileSync(path: string, data: string): void
+  export function renameSync(oldPath: string, newPath: string): void
+  export function mkdirSync(path: string, options?: { recursive?: boolean }): void
+}
+
 /* ──────────────────────────────── ABG config ─────────────────────────────── */
 
 interface AbgWorkspacePolicy {
@@ -281,6 +296,31 @@ interface AbgModuleToggle {
   enabled: boolean
 }
 
+/**
+ * User-editable prompt (`ARCHITECTURE-SPEC` §27.1). `compiled` uses the audited
+ * generated section; `append` adds guidance to it; `replace` substitutes a file
+ * wholesale, which trades the soft conformance invariants for flexibility and is
+ * therefore attributed through `PROMPT_VERSION` as `0.2.0+user:<hash>`.
+ */
+interface AbgPromptPolicy {
+  mode: 'compiled' | 'append' | 'replace'
+  /** Extra guidance appended in `append` mode. */
+  append: string
+  /** Path read in `replace` mode. Required when `mode` is `replace`. */
+  file: string
+  /** Accept text over the §11 byte ceiling, deliberately and visibly. */
+  allowOverBudget: boolean
+}
+
+/**
+ * Opt-in diagnostics mirror for a front end (the GUI integration). Empty `file`
+ * means off: the plugin performs no file I/O unless a deployment asks for it.
+ */
+interface AbgDiagnosticsExportPolicy {
+  file: string
+  limit: number
+}
+
 interface AbgConfig {
   enabled: boolean
   sectionOrder: number
@@ -289,7 +329,9 @@ interface AbgConfig {
   preStep: AbgPreStepPolicy
   userAttention: AbgUserAttentionPolicy
   feedback: AbgFeedbackPolicy
+  prompt: AbgPromptPolicy
   diagnostics: boolean
+  diagnosticsExport: AbgDiagnosticsExportPolicy
 }
 
 /* ───────────────────────── governance module contract ────────────────────── */

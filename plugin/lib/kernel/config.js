@@ -55,18 +55,23 @@ const TOP_LEVEL_KEYS = [
   'preStep',
   'userAttention',
   'feedback',
+  'prompt',
   'diagnostics',
+  'diagnosticsExport',
 ]
 const WORKSPACE_KEYS = ['policy', 'mutatingTools', 'protectedPaths', 'overlapCheck', 'classifyShellCommands']
 const PRESTEP_KEYS = ['orientationGate', 'requireBeforeMutation']
 const USER_ATTENTION_KEYS = ['enforceBatchCompleteness']
 const FEEDBACK_KEYS = ['enabled', 'mode', 'repository', 'tokenEnvVar', 'labels', 'includeDiagnostics']
+const PROMPT_KEYS = ['mode', 'append', 'file', 'allowOverBudget']
+const DIAGNOSTICS_EXPORT_KEYS = ['file', 'limit']
 const MODULE_TOGGLE_KEYS = ['enabled']
 
 const WORKSPACE_POLICIES = ['allow', 'ask', 'deny']
 const ORIENTATION_GATES = ['off', 'warn', 'reject']
 const OVERLAP_MODES = ['off', 'ask', 'deny']
 const FEEDBACK_MODES = ['url', 'api']
+const PROMPT_MODES = ['compiled', 'append', 'replace']
 
 /** Raised when a configuration value is missing, malformed, or unknown. */
 export class AbgConfigError extends Error {
@@ -263,6 +268,45 @@ export function resolveConfig(raw) {
         : requireBoolean(rawFeedback.includeDiagnostics, 'feedback.includeDiagnostics'),
   })
 
+  const rawPrompt = input.prompt === undefined ? {} : requireObject(input.prompt, 'prompt.')
+  rejectUnknownKeys(rawPrompt, PROMPT_KEYS, 'prompt.')
+  const promptMode = rawPrompt.mode === undefined ? 'compiled' : rawPrompt.mode
+  if (typeof promptMode !== 'string' || !PROMPT_MODES.includes(promptMode)) {
+    throw new AbgConfigError(`"prompt.mode" must be one of ${PROMPT_MODES.join(' | ')}`)
+  }
+  if (rawPrompt.append !== undefined && typeof rawPrompt.append !== 'string') {
+    throw new AbgConfigError('"prompt.append" must be a string')
+  }
+  const promptFile = rawPrompt.file === undefined ? '' : requireString(rawPrompt.file, 'prompt.file')
+  if (promptMode === 'replace' && promptFile === '') {
+    throw new AbgConfigError('"prompt.file" is required when "prompt.mode" is "replace"')
+  }
+  const prompt = Object.freeze({
+    mode: /** @type {'compiled' | 'append' | 'replace'} */ (promptMode),
+    append: typeof rawPrompt.append === 'string' ? rawPrompt.append : '',
+    file: promptFile,
+    // The escape hatch is deliberately explicit: exceeding the §11 byte ceiling
+    // is a policy decision, not a default.
+    allowOverBudget:
+      rawPrompt.allowOverBudget === undefined
+        ? false
+        : requireBoolean(rawPrompt.allowOverBudget, 'prompt.allowOverBudget'),
+  })
+
+  const rawExport = input.diagnosticsExport === undefined ? {} : requireObject(input.diagnosticsExport, 'diagnosticsExport.')
+  rejectUnknownKeys(rawExport, DIAGNOSTICS_EXPORT_KEYS, 'diagnosticsExport.')
+  const diagnosticsExport = Object.freeze({
+    // Empty path means "off": the plugin does no file I/O unless asked.
+    file: rawExport.file === undefined ? '' : requireString(rawExport.file, 'diagnosticsExport.file'),
+    limit: rawExport.limit === undefined ? 50 : (() => {
+      const value = rawExport.limit
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 200) {
+        throw new AbgConfigError('"diagnosticsExport.limit" must be an integer between 1 and 200')
+      }
+      return value
+    })(),
+  })
+
   return Object.freeze({
     enabled,
     sectionOrder,
@@ -274,6 +318,8 @@ export function resolveConfig(raw) {
     }),
     userAttention: Object.freeze({ enforceBatchCompleteness }),
     feedback,
+    prompt,
     diagnostics,
+    diagnosticsExport,
   })
 }
