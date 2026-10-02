@@ -177,6 +177,30 @@ interface AbgFileSystemService {
   listDir(target: AbgFsTarget, signal?: unknown): Promise<AbgFsDirEntry[]>
 }
 
+/* ───────────────────────── host: web server (GUI) ────────────────────────── */
+
+/**
+ * The minimal response surface the ABG status route touches. The host route
+ * handler owns the whole response lifecycle; ABG only ever writes one JSON body.
+ */
+interface AbgWebResponse {
+  writeHead(status: number, headers?: Record<string, string>): void
+  end(body?: string): void
+}
+
+/**
+ * `ctx.webserver` (`@deepseek-ai/dsh-host-webserver`), a subset: named route
+ * registration. Duplicate (kind, path) throws, and the returned disposer removes
+ * the route. Paths under `/api` are behind the deployment's browser-trust fence.
+ */
+interface AbgWebServerService {
+  register(route: {
+    kind: 'exact' | 'prefix'
+    path: string
+    handler: (req: unknown, res: AbgWebResponse) => void | Promise<void>
+  }): () => void
+}
+
 /* ───────────────────────────── host: cordis ctx ──────────────────────────── */
 
 /** The Cordis context surface ABG uses. Nothing outside this interface is touched. */
@@ -187,6 +211,7 @@ interface AbgContext {
   fs?: AbgFileSystemService
   on(name: string, listener: (...args: any[]) => any, options?: { global?: boolean }): () => void
   get?(name: string): unknown
+  webserver?: AbgWebServerService
   inject?(services: readonly string[], callback: (scoped: AbgContext) => void): void
   effect?(action: () => (() => void) | void, label?: string): () => void
 }
@@ -297,6 +322,14 @@ interface AbgModuleToggle {
 }
 
 /**
+ * The Web GUI data route (the panel's read path). Exposes the same payload as
+ * `abg_status` and the diagnostics mirror, on the deployment's own web server.
+ */
+interface AbgGuiPolicy {
+  enabled: boolean
+}
+
+/**
  * User-editable prompt (`ARCHITECTURE-SPEC` §27.1). `compiled` uses the audited
  * generated section; `append` adds guidance to it; `replace` substitutes a file
  * wholesale, which trades the soft conformance invariants for flexibility and is
@@ -330,6 +363,7 @@ interface AbgConfig {
   userAttention: AbgUserAttentionPolicy
   feedback: AbgFeedbackPolicy
   prompt: AbgPromptPolicy
+  gui: AbgGuiPolicy
   diagnostics: boolean
   diagnosticsExport: AbgDiagnosticsExportPolicy
 }
