@@ -51,6 +51,24 @@ plugin.
 | `plugin/` | implementation agents | the working `dsh-agent-behavioral-governance` prototype: kernel, four modules, and the verification chain |
 | `eval/` | evaluation agents | behavioural and end-to-end evaluation: the harness, the seeded scenarios, the scripted answerer, and the sandbox runs |
 
+## Approved breaking change (not yet implemented)
+
+The **Web GUI route and the in-harness feedback feature are deprecated and will be
+removed** in the next minor release. The supported interface becomes a terminal
+command, `abg`, run from a Debian shell:
+
+```text
+abg start | pause | restart | exit          # control the governance layer
+abg install | update | uninstall           # package lifecycle for a profile
+abg prompt [show | edit | reset]           # display or change the built-in prompt
+abg status                                 # current control state
+```
+
+`start`/`pause` take effect while the harness is running (the plugin re-reads the
+control state each step); `exit` stops governance for the profile. Everything in
+this document still describes **v0.5.1**, the last release with the Web panel and
+feedback; `plugin/CHANGELOG.md` carries the removal list.
+
 ## Install (prototype only)
 
 ABG is delivered as an npm package with a bundle patch. Install it into a

@@ -273,6 +273,17 @@ I/O at all), throttled to one write per 500 ms, written via a temporary file and
 rename, and fails open: an unwritable path is reported once per window as
 `abg.diagnostics_export_failed` and never affects enforcement.
 
+## Approved breaking change (not yet implemented)
+
+The **Web GUI route and the in-harness feedback feature are deprecated and will be
+removed** in the next minor release. The supported interface becomes a terminal
+command, `abg`, run from a Debian shell:
+
+Run `abg --help` for the command list. `start`/`pause` take effect while the harness is running (the plugin re-reads the
+control state each step); `exit` stops governance for the profile. Everything in
+this document still describes **v0.5.1**, the last release with the Web panel and
+feedback; `plugin/CHANGELOG.md` carries the removal list.
+
 ## Install, update, and uninstall
 
 ABG is installed **into one DSH profile**, never globally, and never into a
