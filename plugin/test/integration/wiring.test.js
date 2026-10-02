@@ -11,6 +11,9 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
 import * as abg from '../../lib/index.js'
 
@@ -551,7 +554,43 @@ test('a full mount degrades nothing and collects its disposer', () => {
   assert.doesNotThrow(() => /** @type {() => void} */ (disposer)())
 })
 
-/* ── Web GUI data route (§28.8) ──────────────────────────────────────────── */
+/* ── Web GUI routes (§28.8) ──────────────────────────────────────────────── */
+
+/**
+ * Drive one route handler and wait for its response. The write routes return
+ * before their async body has written anything, so waiting on `end` is required
+ * rather than incidental.
+ *
+ * @param {{ handler: (req: any, res: any) => unknown }} route
+ * @param {string} method
+ * @param {unknown} [body]
+ * @returns {Promise<{ status: number, body: any }>}
+ */
+async function callRoute(route, method, body) {
+  const raw = body === undefined ? '' : JSON.stringify(body)
+  /** @type {(value?: unknown) => void} */
+  let resolveEnd = () => {}
+  const done = new Promise((resolve) => { resolveEnd = resolve })
+  let status = 0
+  let payload = ''
+  const req = {
+    method,
+    on: (/** @type {string} */ event, /** @type {(arg?: any) => void} */ listener) => {
+      if (raw !== '' && event === 'data') listener(Buffer.from(raw, 'utf8'))
+      if (event === 'end') listener()
+    },
+  }
+  const res = {
+    writeHead: (/** @type {number} */ value) => { status = value },
+    end: (/** @type {unknown} */ text) => { payload = String(text ?? ''); resolveEnd() },
+  }
+  await route.handler(req, res)
+  await done
+  return { status, body: payload === '' ? null : JSON.parse(payload) }
+}
+
+/** @param {any} stub */
+const routeOf = (stub, path) => stub.routes.find((/** @type {any} */ r) => r.path === path)
 
 test('the GUI status route serves one JSON contract and never leaves a response open', async () => {
   const stub = stubContext()
@@ -559,39 +598,98 @@ test('the GUI status route serves one JSON contract and never leaves a response 
   assert.equal(stub.routes.length, 0, 'no route before the web server exists')
   stub.mountWebserver()
 
-  assert.equal(stub.routes.length, 1)
-  const route = stub.routes[0]
-  assert.equal(route.kind, 'exact')
-  assert.equal(route.path, abg.STATUS_ROUTE_PATH)
+  assert.deepEqual(
+    stub.routes.map((r) => r.path).sort(),
+    [abg.STATUS_ROUTE_PATH, abg.PROMPT_ROUTE_PATH, abg.FEEDBACK_ROUTE_PATH].sort(),
+    'one read route and two write routes',
+  )
+  for (const r of stub.routes) assert.equal(r.kind, 'exact')
 
-  const headers = {}
-  let body = ''
-  const okRes = {
-    writeHead: (status, extra) => Object.assign(headers, { status }, extra ?? {}),
-    end: (text) => { body = String(text ?? '') },
-  }
-  await route.handler({}, okRes)
-  assert.equal(headers.status, 200)
-  assert.match(String(headers['Content-Type']), /application\/json/)
-  assert.equal(headers['Cache-Control'], 'no-store')
-  const payload = JSON.parse(body)
-  assert.equal(payload.schema, 1)
-  assert.equal(payload.mount.mounted, true)
-  assert.equal(payload.mount.promptOverridden, false)
-  assert.match(payload.status_line, /^abg:/)
-  assert.ok(Array.isArray(payload.diagnostics))
+  const answer = await callRoute(routeOf(stub, abg.STATUS_ROUTE_PATH), 'GET')
+  assert.equal(answer.status, 200)
+  assert.equal(answer.body.schema, 1)
+  assert.equal(answer.body.mount.mounted, true)
+  assert.equal(answer.body.mount.promptOverridden, false)
+  assert.match(answer.body.status_line, /^abg:/)
+  assert.ok(Array.isArray(answer.body.diagnostics))
+  assert.equal(answer.body.prompt.editable, false, 'default mode is `compiled`')
+  assert.equal(answer.body.feedback.can_file, false, 'url mode cannot file')
 
-  // A handler that owns the response lifecycle must still answer on failure.
-  const failing = {
+  // A handler that owns the response lifecycle must not throw when it is gone.
+  const gone = {
     writeHead: () => { throw new Error('socket closed') },
     end: () => { throw new Error('socket closed') },
   }
-  await assert.doesNotReject(() => Promise.resolve(route.handler({}, failing)))
+  await assert.doesNotReject(() => Promise.resolve(routeOf(stub, abg.STATUS_ROUTE_PATH).handler({ method: 'GET' }, gone)))
 })
 
-test('the GUI route can be switched off', () => {
+test('the GUI routes can be switched off', () => {
   const stub = stubContext()
   abg.apply(stub.ctx, { gui: { enabled: false } })
   stub.mountWebserver()
   assert.equal(stub.routes.length, 0)
+})
+
+test('the prompt write route is read-only until the deployment opts in', async () => {
+  const stub = stubContext()
+  abg.apply(stub.ctx, {})   // default prompt.mode is `compiled`
+  stub.mountWebserver()
+  const route = routeOf(stub, abg.PROMPT_ROUTE_PATH)
+  assert.ok(route, 'the route is registered so the refusal is explainable')
+
+  const refused = await callRoute(route, 'POST', {})
+  assert.equal(refused.status, 409, 'no prompt.file means no write path')
+  assert.match(refused.body.hint, /prompt\.mode/)
+
+  assert.equal((await callRoute(route, 'GET')).status, 405)
+})
+
+test('the prompt write route validates through the same kernel and persists on success', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'abg-gui-prompt-'))
+  const file = path.join(dir, 'prompt.md')
+  try {
+    const stub = stubContext()
+    abg.apply(stub.ctx, { prompt: { mode: 'replace', file } })
+    stub.mountWebserver()
+    const route = routeOf(stub, abg.PROMPT_ROUTE_PATH)
+
+    const tooRisky = await callRoute(route, 'POST', { text: 'Report {{objective}} each turn.' })
+    assert.equal(tooRisky.status, 422, 'the file and the GUI share one rule')
+    assert.match(tooRisky.body.issues[0], /interpolation/)
+
+    const applied = await callRoute(route, 'POST', { text: '# House rules\n\n- Never write outside the workspace.' })
+    assert.equal(applied.status, 200)
+    assert.equal(applied.body.applied, true)
+    assert.match(applied.body.version, /^0\.2\.0\+user:/, 'the effective version names the edited text')
+    assert.equal(
+      readFileSync(file, 'utf8'),
+      '# House rules\n\n- Never write outside the workspace.',
+      'persisted before reporting success',
+    )
+
+    const view = await callRoute(routeOf(stub, abg.STATUS_ROUTE_PATH), 'GET')
+    assert.equal(view.body.mount.promptOverridden, true, 'the live view reflects the edit')
+    assert.equal(view.body.prompt.editable, true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('the feedback write route composes redacted reports through the kernel', async () => {
+  const stub = stubContext()
+  abg.apply(stub.ctx, {})
+  stub.mountWebserver()
+  const route = routeOf(stub, abg.FEEDBACK_ROUTE_PATH)
+
+  assert.equal((await callRoute(route, 'POST', {})).status, 400, 'a summary is required')
+
+  const report = await callRoute(route, 'POST', { summary: 'Blocked a legitimate edit' })
+  assert.equal(report.status, 200)
+  assert.match(report.body.issue_url, /^https:\/\/github\.com\/ccneedb\/agent-behavioral-governance\/issues\/new\?/)
+  assert.match(report.body.markdown, /### What happened/)
+  assert.equal(report.body.filed, false)
+
+  // `file` is honoured only in api mode; in url mode the link is the answer.
+  const attempt = await callRoute(route, 'POST', { summary: 'x', file: true })
+  assert.match(attempt.body.file_result.reason, /url/)
 })

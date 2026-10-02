@@ -239,6 +239,23 @@ diagnostic ring. It reads the host route `/api/abg/status` — the same JSON
 contract as `abg_status` and the diagnostics mirror — behind the deployment's
 `/api` browser-trust fence, so there is no separate RPC surface to secure.
 
+The panel is read-only except for two things:
+
+- **Prompt editor.** The textarea holds the effective section text; **Apply**
+  writes it and it takes effect on the next step (no restart). Editing is
+  enabled only when `prompt.mode: replace` and `prompt.file` name a path —
+  otherwise the editor is read-only and says so. The same validation as the file
+  path applies (no `{{ }}`, byte ceiling unless `allowOverBudget`), a refusal is
+  shown inline, and an applied edit is attributed `PROMPT_VERSION+user:<hash>`
+  with the soft invariants listed as *not verified on user text*.
+- **Feedback form.** Fill what happened / expected / actual, then **Preview**
+  composes the redacted report through the host (`composeFeedback`), with
+  **Copy report** and **Open prefilled issue**; **File issue** appears only in
+  opt-in `api` mode.
+
+Both post to routes on the same host (`/api/abg/prompt`, `/api/abg/feedback`)
+behind the deployment's browser-trust fence.
+
 The browser half is `lib/client.js` and is **hand-authored**: a DSH client plugin
 normally ships a bundle produced by the host monorepo's build, and no public
 out-of-tree build exists, so it is written directly against the lazy-CJS envelope

@@ -183,6 +183,20 @@ interface AbgFileSystemService {
  * The minimal response surface the ABG status route touches. The host route
  * handler owns the whole response lifecycle; ABG only ever writes one JSON body.
  */
+interface AbgWebRequest {
+  method?: string
+  url?: string
+  on(event: 'data', listener: (chunk: { length: number }) => void): void
+  on(event: 'end', listener: () => void): void
+  on(event: 'error', listener: (error: unknown) => void): void
+  destroy?(): void
+}
+
+/** Node's `Buffer`, used only to join request-body chunks. */
+declare const Buffer: {
+  concat(chunks: readonly { length: number }[]): { toString(encoding: string): string }
+}
+
 interface AbgWebResponse {
   writeHead(status: number, headers?: Record<string, string>): void
   end(body?: string): void
@@ -197,7 +211,7 @@ interface AbgWebServerService {
   register(route: {
     kind: 'exact' | 'prefix'
     path: string
-    handler: (req: unknown, res: AbgWebResponse) => void | Promise<void>
+    handler: (req: AbgWebRequest, res: AbgWebResponse) => void | Promise<void>
   }): () => void
 }
 

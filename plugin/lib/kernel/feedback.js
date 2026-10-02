@@ -240,7 +240,7 @@ export async function fileFeedbackIssue(input) {
  * @param {AbgFeedbackMount} input.mount - the live mount record.
  * @param {{ recent?: (limit: number) => unknown[] }} input.diagnostics
  * @param {string} input.pluginVersion
- * @param {string} input.promptVersion
+ * @param {string | (() => string)} input.promptVersion - read live when a function.
  * @param {Record<string, string | undefined>} [input.env]
  * @param {AbgFetch} [input.fetchImpl]
  * @returns {AbgToolDefinition}
@@ -262,6 +262,8 @@ export function feedbackToolDefinition(input) {
     output: { schema: { type: 'object' }, render: () => [] },
     execute: async (args) => {
       const record = /** @type {Record<string, unknown>} */ (args ?? {})
+      const promptVersion =
+        typeof input.promptVersion === 'function' ? input.promptVersion() : input.promptVersion
       const composed = composeFeedback({
         summary: typeof record.summary === 'string' ? record.summary : '',
         expected: typeof record.expected === 'string' ? record.expected : '',
@@ -273,7 +275,7 @@ export function feedbackToolDefinition(input) {
         repository: input.config.repository,
         labels: input.config.labels,
         pluginVersion: input.pluginVersion,
-        promptVersion: input.promptVersion,
+        promptVersion,
         includeDiagnostics: input.config.includeDiagnostics,
       })
 

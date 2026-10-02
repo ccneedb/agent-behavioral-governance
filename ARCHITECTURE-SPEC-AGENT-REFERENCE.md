@@ -1419,6 +1419,36 @@ It registers one panel identity in two seats. It is excluded from `tsc` for the
 same reason first-party built client artifacts are: it is a browser artifact, not
 Node source.
 
+**Write routes, and why they are safe to expose.** The prompt editor and the
+feedback form are the first ABG surfaces that accept input from a browser, so
+they are gated on three rules:
+
+- `GET /api/abg/status` additionally reports the editor's view (`prompt.mode`,
+  `prompt.file`, the effective text, bytes against the §11 budget, `issues`,
+  `promptUnchecked`) and the feedback mode;
+- `POST /api/abg/prompt` accepts `{ text }`, decides through the **same**
+  `composePromptOverride` the file and the config use, writes the result through
+  a temporary sibling and a rename, and only then adopts it in memory — so a
+  panel that says "applied" is reporting a durable fact. Editing is **disabled**
+  (409) unless `prompt.mode` is `replace` and `prompt.file` names a path: there is
+  deliberately no default write target, so a deployment that never opted in gets a
+  read-only editor rather than a surprise file. Refusals return 422 with the
+  issues, and the refusal is recorded as `abg.prompt_override_rejected` with
+  `source: gui`;
+- `POST /api/abg/feedback` composes through `composeFeedback`, so the redaction
+  tests cover the browser path; `file: true` is honoured only in `api` mode and
+  otherwise explains that the link is the answer.
+
+Both live under `/api`, i.e. behind the deployment's browser-trust fence, bound
+the request body (`MAX_REQUEST_BYTES`), reject the wrong method (405), and never
+let a write failure escape the handler.
+
+**Live application.** The section's `text` is a function-valued provider, which
+the host re-evaluates per assembly, so an editor write takes effect on the next
+step without a restart; the live prompt facts (text, bytes, version, issues,
+`unchecked`) are held in one mutable record that the status route, the section
+provider and the feedback report all read.
+
 **Consequence for this project's properties.** The Node half still imports
 nothing first-party; `dsh.client.inject` names package *rows*, not Node imports.
 The cost is real and recorded: the bundle is coupled to this host version and must
