@@ -86,8 +86,16 @@ case "$PROFILE" in
 esac
 
 [ -n "$HOME_DIR" ] || HOME_DIR="${DSH_HOME:-$HOME/.dsh}"
-[ -d "$HOME_DIR" ] || die "DSH_HOME does not exist: $HOME_DIR"
-HOME_DIR=$(CDPATH= cd -- "$HOME_DIR" && pwd)
+# Normalize to an absolute, slash-trimmed path without requiring existence:
+# the helper may create a throwaway home, but must never be fooled about which
+# path is the live one.
+case "$HOME_DIR" in /*) : ;; *) HOME_DIR="$(pwd)/$HOME_DIR" ;; esac
+while [ "$HOME_DIR" != "/" ] && [ "${HOME_DIR%/}" != "$HOME_DIR" ]; do HOME_DIR="${HOME_DIR%/}"; done
+LIVE_HOME="$HOME"
+while [ "$LIVE_HOME" != "/" ] && [ "${LIVE_HOME%/}" != "$LIVE_HOME" ]; do LIVE_HOME="${LIVE_HOME%/}"; done
+LIVE_HOME="$LIVE_HOME/.dsh"
+if [ -d "$HOME_DIR" ]; then HOME_DIR=$(CDPATH= cd -- "$HOME_DIR" && pwd); fi
+if [ -d "$LIVE_HOME" ]; then LIVE_HOME=$(CDPATH= cd -- "$LIVE_HOME" && pwd); fi
 DSH_HOME="$HOME_DIR"
 export DSH_HOME
 
@@ -99,9 +107,7 @@ if [ -z "${npm_config_cache:-}" ]; then
   export npm_config_cache
 fi
 
-LIVE_HOME=""
-if [ -d "$HOME/.dsh" ]; then LIVE_HOME=$(CDPATH= cd -- "$HOME/.dsh" && pwd); fi
-if [ "$ACTION" != "status" ] && [ -n "$LIVE_HOME" ] && [ "$HOME_DIR" = "$LIVE_HOME" ] && [ "$ALLOW_LIVE" -ne 1 ] && [ "${ABG_NPM_ALLOW_LIVE:-0}" != "1" ]; then
+if [ "$ACTION" != "status" ] && [ "$HOME_DIR" = "$LIVE_HOME" ] && [ "$ALLOW_LIVE" -ne 1 ] && [ "${ABG_NPM_ALLOW_LIVE:-0}" != "1" ]; then
   die "refusing to modify the live profile home ($HOME_DIR); pass --allow-live (or set ABG_NPM_ALLOW_LIVE=1) if that is really intended"
 fi
 
@@ -181,6 +187,7 @@ resolve_source() {
 
 # Install (or update to) the artifact, then register the bundle. Idempotent.
 do_install() {
+  [ -d "$HOME_DIR" ] || mkdir -p "$HOME_DIR" || die "cannot create DSH_HOME: $HOME_DIR"
   ensure_profile
   resolve_source
   mkdir -p "$PROFILE_DIR/.abg-artifacts"
@@ -226,6 +233,12 @@ do_uninstall() {
 do_status() {
   printf 'profile    %s\n' "$PROFILE"
   printf 'DSH_HOME   %s\n' "$HOME_DIR"
+  # Read-only: never let `dsh --dump-config` initialize a profile that is not there.
+  if [ ! -d "$PROFILE_DIR" ]; then
+    printf 'package    NOT installed (no such profile)\n'
+    printf 'composes   no\n'
+    exit 1
+  fi
   if [ -f "$PROFILE_DIR/node_modules/$PKG/package.json" ]; then
     ver=$("$NODE_BIN" -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).version)' \
       "$PROFILE_DIR/node_modules/$PKG/package.json" 2>/dev/null || printf '?')

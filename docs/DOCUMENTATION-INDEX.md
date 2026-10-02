@@ -13,7 +13,7 @@ language: en
 
 This is the inventory of the project's documents and the map of which document
 owns which kind of information. Read it before adding, moving, or rewriting a
-document. `scripts/check-docs.sh` enforces the two mechanical rules below.
+document. `scripts/check-docs.sh` enforces the mechanical rules below.
 
 ## Front-matter rule (stated once, applies everywhere)
 
@@ -81,8 +81,8 @@ and leave the link.
 | Information kind | Single authoritative home | Pages that must link, not restate |
 |---|---|---|
 | Positioning — what ABG is and is not | [`PRODUCT-SPEC.md`](../PRODUCT-SPEC.md) §1, §4–§5 | [`README.md`](../README.md) intro, [`SECURITY.md`](../SECURITY.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`plugin/README.md`](../plugin/README.md) |
-| Host integration seams | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) Part A ( §§2, §17–§20) | [`README.md`](../README.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md), [`plugin/README.md`](../plugin/README.md) |
-| Target design and module contracts | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) Part B ( §§22–§34) | [`README.md`](../README.md), [`PRODUCT-SPEC.md`](../PRODUCT-SPEC.md) §13, [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`plugin/README.md`](../plugin/README.md) |
+| Host integration seams | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) Part A (§§2, §17–§20) | [`README.md`](../README.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md), [`plugin/README.md`](../plugin/README.md) |
+| Target design and module contracts | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) Part B (§§22–§34) | [`README.md`](../README.md), [`PRODUCT-SPEC.md`](../PRODUCT-SPEC.md) §13, [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`plugin/README.md`](../plugin/README.md) |
 | Acceptance gates and evaluation method | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §30.4, §32 | [`README.md`](../README.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`IMPLEMENTATION-VALIDATION-HANDOFF.md`](../IMPLEMENTATION-VALIDATION-HANDOFF.md), [`eval/README.md`](../eval/README.md) |
 | Current status and numbers | [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md) §3–§4 | [`README.md`](../README.md) §Status, [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §21, §33, [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`TESTING.md`](../TESTING.md) intro, [`PRODUCT-SPEC.md`](../PRODUCT-SPEC.md) §11 |
 | Install / update / uninstall — installing ABG into a profile | [`README.md`](../README.md) §Install | [`TESTING.md`](../TESTING.md) §2, §5, [`plugin/README.md`](../plugin/README.md) (package-level npm lifecycle) |
