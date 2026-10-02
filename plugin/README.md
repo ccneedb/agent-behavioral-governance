@@ -278,7 +278,9 @@ rename, and fails open: an unwritable path is reported once per window as
 ABG is installed **into one DSH profile**, never globally, and never into a
 profile you rely on while the behavioural gates are unmeasured. The canonical
 artifact is the npm tarball that `npm pack` produces (the release workflow
-attaches it to the GitHub release).
+attaches it to the GitHub release). `npm pack` runs `npm run build` first via the
+`prepack` script, so the tarball always carries freshly emitted
+`lib/generated/**`.
 
 ### The package-manager limitation, first
 
@@ -312,15 +314,15 @@ From a clone, with `npm`, `node` (>= 20), and `dsh` on `PATH`:
 # install (packs this repository's plugin/ with `npm pack`)
 ./scripts/abg-npm.sh install --profile abg-test
 
-# or install a release tarball you downloaded
+# or install a release tarball you downloaded (the version is plugin/package.json's)
 ./scripts/abg-npm.sh install --profile abg-test \
-  --from dsh-agent-behavioral-governance-0.5.0.tgz
+  --from dsh-agent-behavioral-governance-<version>.tgz
 
 # is it mounted?
 ./scripts/abg-npm.sh status --profile abg-test
 
 # update to a newer tarball
-./scripts/abg-npm.sh update --profile abg-test --from dsh-agent-behavioral-governance-0.6.0.tgz
+./scripts/abg-npm.sh update --profile abg-test --from dsh-agent-behavioral-governance-<newer-version>.tgz
 
 # uninstall
 ./scripts/abg-npm.sh uninstall --profile abg-test
