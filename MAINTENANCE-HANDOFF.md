@@ -1,11 +1,13 @@
 ---
 doc_type: maintenance-handoff
 project: agent-behavioral-governance
+# The round this record was opened for; the body below is maintained forward, so
+# treat this as a starting point rather than the current package version (0.5.0).
 plugin_version: 0.1.0
 status: in-progress-not-production-ready
 host_baseline_verified: dsh-0.2.0-rc.2
 supersedes: none
-superseded_in_part_by: architecture-spec-part-b-target-design-abg-0.2.0
+superseded_in_part_by: architecture-spec-part-b-target-design
 language: en
 ---
 
@@ -43,7 +45,7 @@ enforces through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
 ```bash
 cd plugin
 npm run typecheck      # tsc --checkJs, strict, via the ambient contract in lib/contract.d.ts
-npm test               # node --test — 238 tests (all pass; no todo, no skip)
+npm test               # node --test — 259 tests (all pass; no todo, no skip)
 ./scripts/verify.sh    # 11 checks: typecheck, tests, install, composition, execution proof, mount
 ```
 
@@ -56,8 +58,9 @@ node eval/e2e-analyze.mjs              # derives ordering from tool/call events
 
 ## 3. Verified state
 
-**Mechanisms — 238 tests (all pass, no todo, no skip) and 11/11 verification checks at the
-v0.2.0 structural round; 159 tests at the `0.1.0` record below.** Integration tests
+**Mechanisms — 259 tests (all pass, no todo, no skip) and 11/11 verification checks at
+the current round (v0.5.0, the front-end and GUI rounds); 238 tests at the v0.2.0
+structural round; 159 tests at the `0.1.0` record below.** Integration tests
 mount the real `dsh-system-prompt`, `dsh-tools`, `dsh-fs-local`, and the
 `dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack — not mocks.
 

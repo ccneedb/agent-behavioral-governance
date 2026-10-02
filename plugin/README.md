@@ -55,7 +55,7 @@ the problem it closes and is covered by the suite.
 | Gate precision | A matrix of 21 legitimate calls plus the declared traps measures `false_block_rate`, `false_blocks`, and `true_blocks` | `MAINTENANCE-HANDOFF` §4 blocker 3; `ARCHITECTURE-SPEC` §32.4, in [`test/integration/gate-precision.test.js`](test/integration/gate-precision.test.js) |
 | Packaging | `LICENSE` (MIT), `CHANGELOG.md`, and a `files` allowlist that ships both | `MAINTENANCE-HANDOFF` §4 blocker 6; **Gate J** |
 
-The package is now `version: 0.3.0` and remains `"private": true`; the peer range
+The package is now `version: 0.5.0` and remains `"private": true`; the peer range
 is narrowed to the verified one (`>=0.2.0-rc.2 <0.3.0`). Removing `private` and
 choosing the publish target are the release decision
 (`ARCHITECTURE-SPEC` §31.1, §34.2 Q5) and are withheld until the model-backed
@@ -278,7 +278,7 @@ rename, and fails open: an unwritable path is reported once per window as
 ```bash
 cd plugin
 npm run typecheck     # tsc --checkJs, strict, against the ambient seam contract
-npm test              # node --test (unit + integration) — 238 tests, no todo
+npm test              # node --test (unit + integration) — 259 tests, no todo
 ./scripts/verify.sh   # the full evidence chain (11 checks), real profile install
 ```
 

@@ -34,7 +34,7 @@ ABG is installed into a profile, not globally. Pick one of the two methods.
 dsh --profile abg-test --from-default-profile headless --dump-config
 
 dsh plugin --profile abg-test add \
-  "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.3.0/dsh-agent-behavioral-governance-0.3.0.tgz"
+  "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.5.0/dsh-agent-behavioral-governance-0.5.0.tgz"
 ```
 
 ### Method B — from a clone (works even if the release asset is missing)

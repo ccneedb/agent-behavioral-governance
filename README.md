@@ -23,7 +23,7 @@ or sandbox. The canonical statement of the integration model is in
 [Canonical architectural statement](#canonical-architectural-statement).
 
 > **Status: prototype, not production-ready.** The plugin is structurally
-> complete and fully green (238 tests, 11/11 verification checks), but its
+> complete and fully green (259 tests, 11/11 verification checks), but its
 > model-backed behavioural gates **C, D, and E have no valid measurement** for
 > the current prompt revision, the package is `"private": true`, and the publish
 > target is undecided. It is not recommended for a working profile. See
@@ -83,7 +83,7 @@ A/B procedure, and a redacted one-step reporting tool:
 # not to `dsh plugin` (everything after `plugin` is forwarded to pnpm)
 dsh --profile abg-test --from-default-profile headless --dump-config
 dsh plugin --profile abg-test add \
-  "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.3.0/dsh-agent-behavioral-governance-0.3.0.tgz"
+  "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.5.0/dsh-agent-behavioral-governance-0.5.0.tgz"
 
 # or from a clone
 git clone --depth 1 https://github.com/ccneedb/agent-behavioral-governance.git abg
@@ -114,7 +114,7 @@ the environment.
 README.md                             this file
 PRODUCT-SPEC.md                       positioning, scope, goals, success criteria
 ARCHITECTURE-SPEC-AGENT-REFERENCE.md  architecture; Part A verified host seams,
-                                      Part B the v0.2.0 target design
+                                      Part B the target design and its rounds
 IMPLEMENTATION-VALIDATION-HANDOFF.md  build order, validation cases, gates
 MAINTENANCE-HANDOFF.md                point-in-time status and process gotchas
 CONTRIBUTING.md                       prerequisites, checks, and the project rules
@@ -122,11 +122,16 @@ SECURITY.md                           what ABG is not, and how to report
 CODE_OF_CONDUCT.md                    Contributor Covenant 2.1
 TESTING.md                            volunteer install, first trial, and feedback
 LICENSE                               MIT
+scripts/                              repository tooling (check-install.sh)
 docs/                                 the task-failure report template
 .github/                              CI, issue forms, and the pull-request template
 plugin/                               the implementation and its test suite
 eval/                                 the behavioural evaluation harness
 ```
+
+Document front matter carries `doc_type`, `status`, and `revision`. `version` is
+that document's **own** revision — it tracks the document, not the package — and
+`plugin_version`, where present, names the package version the record describes.
 
 ## Development
 
@@ -153,10 +158,10 @@ through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
 status line plus the read-only `abg_status` and `abg_questions` tools.
 
 ```bash
-cd plugin && ./scripts/verify.sh    # typecheck, 238 tests, real install, real mount
+cd plugin && ./scripts/verify.sh    # typecheck, 259 tests, real install, real mount
 ```
 
-The evidence chain covers strict typechecking, **238 tests** (all passing — no
+The evidence chain covers strict typechecking, **259 tests** (all passing — no
 todo, no skip; unit, prompt conformance, and integration mounting the **real**
 `dsh-system-prompt`, `dsh-tools`, `dsh-fs-local`, and the
 `dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack), a real install into a
@@ -174,7 +179,7 @@ deleted as superseded when that module was removed (`ARCHITECTURE-SPEC` §23), s
 `eval/README.md` now records the method and the pending re-run rather than
 superseded numbers.
 
-## Target design (ABG v0.2.0)
+## Target design
 
 The forward design is `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` **Part B** (§§22–34).
 It closes the release blockers of `MAINTENANCE-HANDOFF.md`: observable

@@ -787,7 +787,9 @@ A working prototype of this specification lives in [`plugin/`](plugin/README.md)
 `dsh-agent-behavioral-governance` `0.1.0`. It exists to make the §17 seam
 bindings falsifiable rather than merely asserted.
 
-> **v0.2.0 addendum.** The plugin is now `version: 0.2.0` (still `"private": true`).
+> **v0.2.0 addendum (historical — the package has since moved to `0.5.0`; the
+> contract recorded here is unchanged).** At that revision the plugin was
+> `version: 0.2.0` (still `"private": true`).
 > Per-agent state, the diagnostics channels, the compatibility adapter, the
 > read-only status and question surfaces, the packaging artifacts, and the
 > simulated gate-precision matrix have landed since this table was written, so the
@@ -1682,9 +1684,11 @@ phases build on its result.
 | P6 | Evaluation: precision and breadth | `eval/e2e.mjs`, `eval/e2e-analyze.mjs`, `eval/scenarios.mjs`, `eval/README.md` | P1–P5 | **partial** — the simulated gate-precision matrix landed (21 legitimate calls, 0 false blocks; 4 traps caught); the model-backed Gate C/E measurements and the wider evidence of §32.5 did not |
 | P7 | Packaging | `plugin/package.json`, new `plugin/LICENSE`, new `plugin/CHANGELOG.md`, `plugin/README.md` | P1 | **partial** — LICENSE, CHANGELOG, and the `files` allowlist landed, and the peer range is narrowed to the verified one; publication stays withheld while Gates C, D, and E are unverified |
 
-**Round status.** After the v0.2.0 structural round and the 2026-10-02 mount
-hardening the plugin is at `version: 0.3.0`, still `"private": true`, with
-**238 tests (all pass — no todo, no skip)**, a clean strict typecheck, and
+**Round status.** After the v0.2.0 structural round, the 2026-10-02 mount
+hardening, the front-end round (editable prompt and diagnostics mirror, v0.4.0)
+and the GUI round (host routes, panel, prompt editor, feedback form, v0.5.0) the
+plugin is at `version: 0.5.0`, still `"private": true`, with **259 tests (all
+pass — no todo, no skip)**, a clean strict typecheck, and
 `scripts/verify.sh` at **11/11** (typecheck, suite, real install, row composition,
 installed-artifact execution proof, live mount). The unmet items
 are exactly the ones that need a real model in the loop: behavioural
