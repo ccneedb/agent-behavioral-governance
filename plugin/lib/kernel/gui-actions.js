@@ -21,9 +21,9 @@
  *    unit-testable without a host, a browser or a network.
  */
 
-import { composePromptOverride } from './prompt-override.js'
+import { composePromptOverride } from '../generated/kernel/prompt-override.js'
 import { composeFeedback, fileFeedbackIssue, MAX_DIAGNOSTICS } from './feedback.js'
-import { DEFAULT_MAX_PROMPT_BYTES } from './prompt-compiler.js'
+import { DEFAULT_MAX_PROMPT_BYTES } from '../generated/kernel/prompt-compiler.js'
 
 /** Largest accepted JSON request body, to bound a browser's influence on memory. */
 export const MAX_REQUEST_BYTES = 65536

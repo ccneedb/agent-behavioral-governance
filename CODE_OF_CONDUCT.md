@@ -1,3 +1,14 @@
+---
+doc_type: code-of-conduct
+project: agent-behavioral-governance
+version: 2.1.0
+status: active
+owner: maintainers
+last_reviewed: 2026-10-02
+audience: everyone
+language: en
+---
+
 # Contributor Covenant Code of Conduct
 
 This project adopts the [Contributor Covenant](https://www.contributor-covenant.org),

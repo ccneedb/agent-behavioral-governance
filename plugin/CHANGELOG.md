@@ -22,6 +22,49 @@ the governance state `DOMAIN_VERSION` (§22.3).
 > for volunteer testing** (a tag plus a packed tarball), not as an npm package:
 > the `0.1.0`/`0.2.0` entries below stay staged under **Unreleased**.
 
+## [0.5.1] — 2026-10-02
+
+**This fixes a defect that made every default install of 0.4.0 and 0.5.0 inert.**
+
+### Fixed
+
+- **A shipped configuration the plugin itself rejected.** `cordis.patch.yml`
+  ships `prompt.file: ''` and `diagnosticsExport.file: ''` — documented values
+  meaning "none configured"/"off" — but both were validated with a
+  non-empty-string check. `buildGovernance()` therefore threw on the shipped
+  configuration, and because `apply()` must not throw (§26.2) ABG fell into its
+  fault surface: **no prompt section, no hooks, no tools, and no GUI route**, with
+  nothing reported by the host. Path fields now accept the empty string and still
+  reject whitespace-only values.
+- **The diagnostics mirror wrote an empty snapshot.** The forced flush ran before
+  the mount records existed and the throttle then suppressed them, so the mirror
+  was written once, empty, and never refreshed. It now flushes after `abg.mount`.
+- **The gate could not see the defect.** `verify.sh` proved activation by applying
+  `{}` (all defaults) rather than the shipped patch, so a package whose own config
+  was rejected passed. The installed-artifact proof now applies the shipped
+  `cordis.patch.yml` verbatim and asserts the prompt section still binds.
+
+### Added
+
+- `npm run build` (`src/**/*.ts` → `lib/generated`) is now check 1 of the gate, so
+  emitted artifacts can never be validated stale (12 checks).
+- `scripts/abg-npm.sh` and `scripts/abg-npm-lifecycle-check.sh`: an npm-native
+  install/update/uninstall path. Note the verified host fact — plain
+  `npm install` does **not** register the profile bundle, so the helper also
+  maintains `dsh.profile.bundles`; `dsh plugin` itself forwards to pnpm.
+- `docs/DOCUMENTATION-INDEX.md` and `scripts/check-docs.sh`: one authoritative
+  home per information kind, with link, front-matter and index-coverage checking
+  wired into CI.
+- The first slice of the TypeScript migration: three kernel modules now have
+  `.ts` sources with emitted JS and declarations as build artifacts
+  (`plugin/TYPESCRIPT-MIGRATION.md` records the exception list and the plan).
+
+### Documentation
+
+- The Web GUI panel requires a **Web** profile; a headless profile has no web app,
+  so no panel can appear there however the plugin is installed. `check-install.sh`
+  now says which situation you are in and names the Web-capable profiles.
+
 ## [0.5.0] — 2026-10-02
 
 The Web GUI panel becomes editable: it can now change the prompt and file

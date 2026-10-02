@@ -1,9 +1,20 @@
+---
+doc_type: contributing
+project: agent-behavioral-governance
+version: 0.1.0
+status: active
+owner: maintainers
+last_reviewed: 2026-10-02
+audience: contributors
+language: en
+---
+
 # Contributing to ABG
 
 Thanks for considering a contribution. ABG (Agent Behavioral Governance) is an
 additive project-governance plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
-It is a **verifiable prototype**, not a released product — read the status
-section of [`README.md`](README.md) before relying on it.
+It is a **verifiable prototype**, not a released product — current status and
+numbers are in [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4.
 
 This document is the process contract. The technical contract lives in
 [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md).
@@ -27,22 +38,32 @@ export ABG_DSH_PACKAGES=/path/to/node_modules/@deepseek-ai
 
 | Path | What it is |
 |---|---|
-| `README.md` | project status, evidence chain, and layout |
+| `README.md` | entry point, install, and evidence chain |
 | `PRODUCT-SPEC.md` | positioning, scope, goals, success criteria |
-| `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` | architecture; **§17** verified host seams, **§18** deltas, **Part B (§§22–34)** the v0.2.0 target design |
-| `IMPLEMENTATION-VALIDATION-HANDOFF.md` | build order, validation cases, acceptance gates |
-| `MAINTENANCE-HANDOFF.md` | point-in-time status, blockers, backlog, process gotchas |
+| `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` | architecture; **§17** verified host seams, **§18** deltas, **§32** gates, **Part B (§§22–34)** the target design |
+| `MAINTENANCE-HANDOFF.md` | current status and numbers (**§3–§4**), blockers, backlog, process gotchas |
+| `TESTING.md` | volunteer install, first trial, A/B check, and feedback |
+| `SECURITY.md` | boundaries, accepted limits, and vulnerability reporting |
+| `IMPLEMENTATION-VALIDATION-HANDOFF.md` | retired — a pointer to the §32 gates and the build order |
+| `docs/DOCUMENTATION-INDEX.md` | document inventory and the single-source-of-truth map |
+| `docs/TASK-FAILURE-REPORT-TEMPLATE.md` | the template to fill in when reporting a task failure |
+| `scripts/` | repository tooling: `check-install.sh`, `check-docs.sh` |
 | `plugin/` | the implementation: kernel, four modules, tests, and `scripts/verify.sh` |
 | `eval/` | behavioural and end-to-end evaluation harness and scenarios |
-| `docs/TASK-FAILURE-REPORT-TEMPLATE.md` | the template to fill in when reporting a task failure |
 
 ## Running the checks
 
+This is the single home for the verification commands; other documents link here
+instead of restating them.
+
 ```bash
+./scripts/check-docs.sh    # from the repository root: docs links, front matter, index coverage
+
 cd plugin
-npm run typecheck     # tsc --checkJs, strict, against the ambient seam contract
-npm test              # node --test — unit, conformance, and integration
-./scripts/verify.sh   # the full evidence chain (11 checks), including a real profile install
+npm run build              # compile src/**/*.ts into lib/generated (also runs as pretest)
+npm run typecheck          # tsc --checkJs, strict, against the ambient seam contract
+npm test                   # node --test — unit, conformance, and integration
+./scripts/verify.sh        # the full evidence chain, including a real profile install
 ```
 
 `scripts/verify.sh` is the **release gate**. It installs the plugin into a
@@ -82,6 +103,18 @@ reason the project is as small as it is:
 8. **Do not commit regenerable artifacts or credentials.** `.gitignore` covers
    the known ones; if you find a new one, add it there rather than committing it.
 
+## Adding a module
+
+Follow the dependency order: identify the problem (a failure class, not a
+symptom); confirm the host seam that can enforce it; define the smallest
+enforcement mechanism; define the state; define the prompt contribution; define
+the tests; then implement.
+
+Before changing existing policy text: name the failure or rationale, re-check host
+compatibility, bump the module version if the semantics changed, add or update a
+regression test, and preserve baseline behaviour unless evidence supports the
+change.
+
 ## Submitting a change
 
 - Keep a change set focused: one problem, one set of tests, one verification run.
@@ -111,7 +144,9 @@ and the publish target is undecided. The rules a release must satisfy are in
 - a new host release is added to `dsh.compatibility.dshReleases` only after the
   compatibility baseline test passes and the baseline file is reviewed;
 - `scripts/verify.sh` must pass against the pinned host version;
-- `npm pack` must contain exactly the `files` allowlist and no build step.
+- `npm pack` must contain exactly the `files` allowlist, with no consumer-side
+  build step: the package ships the compiled `lib/`, and the only build is the
+  `src/**/*.ts` → `lib/generated` compile wired through `npm run build`/`pretest`.
 
 ## Code of conduct
 

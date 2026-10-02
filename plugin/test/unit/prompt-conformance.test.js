@@ -19,7 +19,7 @@ import {
   DEFAULT_MAX_PROMPT_BYTES,
   PROMPT_BYTE_FLOOR,
   RECORDED_PROMPT_BYTES,
-} from '../../lib/kernel/prompt-compiler.js'
+} from '../../lib/generated/kernel/prompt-compiler.js'
 
 const { prompt: PROMPT, enabled } = buildGovernance(undefined)
 

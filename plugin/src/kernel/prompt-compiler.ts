@@ -13,6 +13,10 @@
  *    containing interpolation syntax so the two defences agree.
  * 2. ABG must never set `complete: true`: one effective complete section
  *    replaces the entire assembled prompt, and two make assembly fail.
+ *
+ * Migrated from `prompt-compiler.js` (2026-10-02). This is the source of truth;
+ * `lib/generated/kernel/prompt-compiler.js` is the `tsc` build artifact that
+ * DSH actually loads (see `TYPESCRIPT-MIGRATION.md`).
  */
 
 /**
@@ -46,11 +50,8 @@ export const DEFAULT_MAX_PROMPT_BYTES = Math.min(
 /**
  * Count UTF-8 bytes without depending on `Buffer` or `TextEncoder`, so the
  * package stays import-free and typecheckable in isolation.
- *
- * @param {string} text
- * @returns {number}
  */
-export function utf8Bytes(text) {
+export function utf8Bytes(text: string): number {
   let bytes = 0
   for (const character of text) {
     const codePoint = character.codePointAt(0) ?? 0
@@ -59,24 +60,16 @@ export function utf8Bytes(text) {
   return bytes
 }
 
-/**
- * Whether text contains prompt-variable interpolation syntax.
- *
- * @param {string} text
- * @returns {boolean}
- */
-export function containsInterpolationSyntax(text) {
+/** Whether text contains prompt-variable interpolation syntax. */
+export function containsInterpolationSyntax(text: string): boolean {
   return text.includes('{{') || text.includes('}}')
 }
 
 /**
  * Normalise a statement for duplicate detection: collapse whitespace, strip
  * trailing punctuation, and case-fold.
- *
- * @param {string} statement
- * @returns {string}
  */
-function normalise(statement) {
+function normalise(statement: string): string {
   return statement
     .replace(/\s+/g, ' ')
     .trim()
@@ -85,32 +78,31 @@ function normalise(statement) {
     .toLowerCase()
 }
 
+/** Input to {@link compilePrompt}. */
+export interface CompilePromptInput {
+  /** Stable kernel invariants. */
+  kernelPrinciples: readonly string[]
+  /** Enabled modules, already in dependency order. */
+  modules: readonly GovernanceModule[]
+  /** Budget for the compiled section. */
+  maxBytes?: number
+}
+
 /**
  * Compile the single additive ABG governance section.
  *
- * @param {object} input
- * @param {readonly string[]} input.kernelPrinciples - stable kernel invariants.
- * @param {readonly GovernanceModule[]} input.modules - enabled modules, already in dependency order.
- * @param {number} [input.maxBytes] - budget for the compiled section.
- * @returns {string} the section text, or `''` when nothing is enabled.
- * @throws {Error} when the compiled text exceeds the budget or contains interpolation syntax.
+ * @returns the section text, or `''` when nothing is enabled.
+ * @throws when the compiled text exceeds the budget or contains interpolation syntax.
  */
-export function compilePrompt(input) {
+export function compilePrompt(input: CompilePromptInput): string {
   const { kernelPrinciples, modules } = input
   const maxBytes = input.maxBytes ?? DEFAULT_MAX_PROMPT_BYTES
 
-  /** @type {Set<string>} */
-  const seen = new Set()
-  /** @type {string[]} */
-  const lines = []
+  const seen = new Set<string>()
+  const lines: string[] = []
 
-  /**
-   * Append one statement unless an equivalent one was already emitted.
-   *
-   * @param {string} statement
-   * @returns {void}
-   */
-  const push = (statement) => {
+  /** Append one statement unless an equivalent one was already emitted. */
+  const push = (statement: string): void => {
     const key = normalise(statement)
     if (key === '' || seen.has(key)) return
     seen.add(key)
@@ -124,14 +116,10 @@ export function compilePrompt(input) {
    * has already been emitted. §5.2 requires duplicated statements to be removed;
    * a fragment that only paraphrases its own module's principles is pure prompt
    * cost with no added guidance.
-   *
-   * @param {string} fragment
-   * @returns {string}
    */
-  const dedupeFragment = (fragment) => {
+  const dedupeFragment = (fragment: string): string => {
     if (fragment === '') return ''
-    /** @type {string[]} */
-    const kept = []
+    const kept: string[] = []
     for (const sentence of fragment.split(/(?<=[.!?])\s+/)) {
       const trimmed = sentence.trim()
       const key = normalise(trimmed)
@@ -142,8 +130,7 @@ export function compilePrompt(input) {
     return kept.join(' ')
   }
 
-  /** @type {string[]} */
-  const moduleSections = []
+  const moduleSections: string[] = []
   for (const module of modules) {
     const before = lines.length
     for (const principle of module.principles) push(principle)
@@ -186,13 +173,15 @@ export function compilePrompt(input) {
   return text
 }
 
-/**
- * Report the compiled prompt's size, for `prompt_assembly` diagnostics (§12).
- *
- * @param {string} text
- * @returns {{ bytes: number, characters: number, lines: number }}
- */
-export function promptStats(text) {
+/** Size report for the compiled prompt (`prompt_assembly` diagnostics, §12). */
+export interface PromptStats {
+  bytes: number
+  characters: number
+  lines: number
+}
+
+/** Report the compiled prompt's size, for `prompt_assembly` diagnostics (§12). */
+export function promptStats(text: string): PromptStats {
   return {
     bytes: utf8Bytes(text),
     characters: text.length,

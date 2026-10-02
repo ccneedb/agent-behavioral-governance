@@ -2,8 +2,10 @@
 doc_type: product-spec
 project: agent-behavioral-governance
 version: 0.3.0
-status: finalized-for-agent-handoff
-revision: child-agent-lifecycle-removed
+status: active
+owner: maintainers
+last_reviewed: 2026-10-02
+revision: docs-health-consolidation
 verified_against: dsh-v0.2.0-rc.2
 language: en
 host_target: deepseek-harness
@@ -14,6 +16,10 @@ format_note: conservative-machine-readable-markdown
 # Agent Behavioral Governance — Product Specification
 
 ## 1. Product Positioning
+
+This section is the **canonical positioning** for the project; every other
+document links here rather than restating it
+([`docs/DOCUMENTATION-INDEX.md`](docs/DOCUMENTATION-INDEX.md)).
 
 **Agent Behavioral Governance (ABG)** is a DeepSeek Harness plugin that supplements the host system prompt and runtime with project-work governance.
 
@@ -154,6 +160,9 @@ The kernel does **not** own all behavioral policy text.
 | `information-integrity` | stale/invalid information reuse | project state + prompt + lifecycle/state checks |
 | `user-attention` | fragmented questioning | question-state aggregation + prompt + user-question integration |
 
+The shipped plugin realizes exactly this set; the maintained per-module contracts
+are in [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §24.
+
 ## 7. Module Contract
 
 Each module must declare at least:
@@ -243,9 +252,11 @@ Required evaluation dimensions include:
 | Compatibility | host-version regression failures |
 | Prompt cost | governance prompt token footprint and stability |
 
-## 11. Success Criteria for v0.1
+## 11. Success Criteria (v0.1 target, met — historical)
 
-ABG v0.1 is successful when:
+The v0.1 target was met; the package has since moved to `0.5.0`. Current status
+and numbers: [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4. The v0.1
+criteria were:
 
 1. its governance section can be added without replacing or semantically colliding with the host system prompt;
 2. the four failure classes (`FC-2.1`…`FC-2.4`) are represented as distinct modules;

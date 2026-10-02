@@ -14,10 +14,10 @@ import {
   UNCHECKED_INVARIANTS,
   composePromptOverride,
   shortHash,
-} from '../../lib/kernel/prompt-override.js'
+} from '../../lib/generated/kernel/prompt-override.js'
 import { buildGovernance, PROMPT_VERSION } from '../../lib/index.js'
 import { resolveConfig, AbgConfigError } from '../../lib/kernel/config.js'
-import { DEFAULT_MAX_PROMPT_BYTES } from '../../lib/kernel/prompt-compiler.js'
+import { DEFAULT_MAX_PROMPT_BYTES } from '../../lib/generated/kernel/prompt-compiler.js'
 
 const BASE = '## Agent Behavioral Governance (ABG)\n\n- Prefer a safe refusal.\n'
 

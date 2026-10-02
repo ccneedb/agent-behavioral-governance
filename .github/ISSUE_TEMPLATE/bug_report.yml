@@ -27,7 +27,7 @@ body:
           required: false
         - label: "I reproduced the failure with ABG disabled (`enabled: false` or the `abg-off.yml` overlay), or I explain why that was not possible."
           required: true
-        - label: This is not in the "Known limitations that are not vulnerabilities" list in `SECURITY.md`.
+        - label: This is not in the accepted-limits list in `SECURITY.md` ("Known limitations — not vulnerabilities, not bugs").
           required: true
 
   - type: textarea
@@ -39,7 +39,7 @@ body:
         OS: Ubuntu 24.04
         node -v: v22.x
         dsh -V: 0.2.0-rc.2
-        ABG: 0.2.0 (PROMPT_VERSION ...)
+        ABG: 0.5.0 (PROMPT_VERSION ...)
         profile: test-profile
         re-installed after last change: yes
     validations:

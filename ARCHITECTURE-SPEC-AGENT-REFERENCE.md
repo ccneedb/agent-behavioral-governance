@@ -2,11 +2,13 @@
 doc_type: architecture-spec
 project: agent-behavioral-governance
 version: 0.6.0
-status: finalized-for-agent-handoff
-revision: editable-prompt-and-diagnostics-mirror
+status: active
+owner: maintainers
+last_reviewed: 2026-10-02
+revision: status-home-and-gates-consolidated
 part_a: verified-host-integration-and-prototype-0.1.0
-part_b: target-design-abg-0.2.0
-part_b_status: implemented-through-the-0.2.0-structural-round; model-backed-gates-c-d-e-pending
+part_b: target-design-baseline-0.2.0-extended-through-0.5.0
+part_b_status: implemented-through-the-0.5.0-gui-round; model-backed-gates-c-d-e-pending
 verified_against: dsh-v0.2.0-rc.2
 verified_method: installed-distribution-source-inspection
 audience: agents-only
@@ -20,7 +22,7 @@ format_note: conservative-machine-readable-markdown
 
 > **Audience:** agents implementing, reviewing, or extending this plugin inside DeepSeek Harness. This document is intentionally more implementation-oriented than the Product Specification.
 >
-> **Two parts.** Sections 1–21 ("Part A") are the verified record of host integration and of the `0.1.0` prototype. Sections 22–34 ("Part B", starting at §22) specify the **target design for ABG v0.2.0**. Part B states where it changes a Part A decision instead of rewriting Part A.
+> **Two parts.** Sections 1–21 ("Part A") are the verified record of host integration and of the `0.1.0` prototype. Sections 22–34 ("Part B") carry the **target design**, whose baseline is ABG v0.2.0 and which was extended through the v0.4.0 front-end and v0.5.0 GUI rounds. Part B states where it changes a Part A decision instead of rewriting Part A. Current implementation status and numbers live in [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4.
 
 ## 1. Architectural Objective
 
@@ -787,11 +789,14 @@ A working prototype of this specification lives in [`plugin/`](plugin/README.md)
 `dsh-agent-behavioral-governance` `0.1.0`. It exists to make the §17 seam
 bindings falsifiable rather than merely asserted.
 
-> **v0.2.0 addendum.** The plugin is now `version: 0.2.0` (still `"private": true`).
+> **v0.2.0 addendum (historical — the package has since moved to `0.5.0`; the
+> contract recorded here is unchanged).** At that revision the plugin was
+> `version: 0.2.0` (still `"private": true`).
 > Per-agent state, the diagnostics channels, the compatibility adapter, the
 > read-only status and question surfaces, the packaging artifacts, and the
 > simulated gate-precision matrix have landed since this table was written, so the
-> table below records the `0.1.0` state and §33 carries the current phase status.
+> table below records the `0.1.0` state. Current status and numbers are in
+> [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4; §33 is the phase plan.
 
 | Aspect | Status |
 |---|---|
@@ -803,7 +808,7 @@ bindings falsifiable rather than merely asserted.
 | `agent/pre-step` gate (§7.1) | wired and unit tested; live dispatch not exercised |
 | Runtime question consolidation (§7.4) | collector implemented and unit tested; not yet wired in front of `ctx.userQuestions` |
 | Per-agent state (§17.7) | not implemented; orientation is per-composition in the prototype |
-| Prompt-content conformance (§2 and §10 of the handoff, D11) | implemented as an executable suite covering failure-class coverage, §5.2 dedupe, the §10 DO/DON'T rules, and the §11 budget ceiling |
+| Prompt-content conformance (D11) | implemented as an executable suite covering failure-class coverage, §5.2 dedupe, the prompt content DO/DON'T rules (§27), and the §11 budget ceiling |
 | Packaging, bundle patch, install, composition, mount | verified end to end against `@deepseek-ai/dsh` `0.2.0-rc.2` |
 
 The prototype has **zero runtime dependencies**, imports no first-party package,
@@ -817,13 +822,15 @@ behavioural suite with `npm test` in `plugin/`.
 
 ---
 
-# Part B — Target Design: ABG v0.2.0
+# Part B — Target Design (baseline ABG v0.2.0)
 
-> **Status.** Part B is a design specification for review and subsequent
-> implementation. It is grounded in Part A's verified seams and in the
-> `0.1.0` prototype's evidence, and it records the open items it does not
-> decide in §34. It does not implement itself, and it does not retroactively
-> rewrite Part A.
+> **Status.** Part B began as the v0.2.0 design and now also carries the later
+> rounds: v0.3.0 feedback (§28.6), the v0.4.0 front-end (editable prompt §27.1,
+> diagnostics mirror §28.7), and the v0.5.0 GUI (§28.8). It is grounded in Part
+> A's verified seams and does not retroactively rewrite Part A. Current
+> implementation status and numbers are maintained once, in
+> [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4; the phase plan is §33
+> and the acceptance gates are §32.
 
 ## 22. Target Design v0.2.0 — Scope, Versioning, and Governing Decisions
 
@@ -1162,7 +1169,8 @@ cannot report its own mount failure. Consequences:
 every registration (`systemPrompt.section`, `systemPrompt.context`,
 `system-prompt/assemble`, `agent/pre-step`, `tools/pre-execute`, `tools`,
 `storageDomain`, `dispose.storageDomain`, and each tool definition) in guarded
-steps; the fault surface is `mountConfigFaultSurface()`. `verify.sh`'s check 5
+steps; the fault surface is `mountConfigFaultSurface()`. `verify.sh`'s
+installed-artifact check
 proves the behaviour against the **installed** copy of the package, and
 `test/integration/wiring.test.js` covers the same contract in-process.
 - A genuine unmount is observable only from outside the plugin — the transcript
@@ -1197,7 +1205,7 @@ diagnostic, and no context contribution is produced.
   enforces it, and `test/unit/prompt-compiler.test.js` together with
   `test/unit/prompt-conformance.test.js` assert it from the same constants, so
   the compiler and the conformance suite cannot disagree about the budget.
-- The §11 content rules stay **executable** (D11): the conformance suite keeps
+- The prompt content rules stay **executable** (D11): the conformance suite keeps
   asserting failure-class coverage, §5.2 no-duplication, at least one trigger
   condition per module, no authority claim, no implementation leakage, no
   restatement of a deterministically enforced rule, and the byte budget. It is
@@ -1206,7 +1214,7 @@ diagnostic, and no context contribution is produced.
 ### 27.1 User-editable prompt (v0.4.0)
 
 The compiled section is generated and **audited**: the conformance suite enforces
-§5.2 deduplication, the §10 content rules (no authority claim, no implementation
+§5.2 deduplication, the content rules in §27 (no authority claim, no implementation
 leakage, no restatement of an enforced rule), and the §11 byte budget. A user who
 wants different wording is asking to trade some of that for flexibility, which is
 a legitimate request — provided the trade is explicit and attributable.
@@ -1394,6 +1402,16 @@ ABG ships a browser half so an operator can see governance state without reading
 a transcript or calling a tool. Verified end to end in a workspace-local web
 profile (never the live profile): the sidebar entry registers, the panel opens,
 and it renders the mount record, the status line, and the diagnostic ring.
+
+**The panel exists only in a Web-profile run.** A profile created from the
+`headless` template mounts no web server or client substrate, so there is no
+surface for the panel to attach to. DSH also lists the bundles of the profile it
+is *running*, so installing ABG into one profile while running another looks
+identical to a failed install. To see the panel, install ABG into the profile
+that is actually run as a Web app and start that profile. If ABG fails to
+configure it mounts nothing and the panel reports "ABG status is unavailable",
+with the cause recorded as the `abg.config_invalid` diagnostic;
+`scripts/check-install.sh <profile>` distinguishes the two situations.
 
 **Data path.** The host registers one exact route on `ctx.webServer`
 (`@deepseek-ai/dsh-host-webserver`), `STATUS_ROUTE_PATH = /api/abg/status`,
@@ -1590,13 +1608,16 @@ unnecessary after the first answer must produce no redundant question.
   forces at least a minor bump and a CHANGELOG entry.
 - A new host release adds a `dsh.compatibility.dshReleases` entry only after the
   compatibility baseline test passes and the baseline file is reviewed.
-- `plugin/scripts/verify.sh` is the release gate: strict typecheck, the full
-  test suite, a real install, row composition, a positive execution proof against
-  the **installed** artifact, and a real mount against the pinned host version. It
-  is not wired to an `npm run` alias; `plugin/package.json` exposes only `test` and
-  `typecheck` (2026-10-02).
-- Reproducibility: `npm pack` must contain exactly the `files` allowlist and no
-  build step.
+- `plugin/scripts/verify.sh` is the release gate: it builds the TypeScript
+  sources, runs the strict typecheck and the full test suite, performs a real
+  install, row composition, a positive execution proof against the **installed**
+  artifact, and a real mount against the pinned host version. The checks are wired
+  through `plugin/package.json` npm scripts (`build`, `pretest`, `test`,
+  `typecheck`, `prepack`); [`plugin/README.md`](plugin/README.md) is the
+  package-level record.
+- Reproducibility: `npm pack` must contain exactly the `files` allowlist, with no
+  consumer-side build step. The package ships the compiled `lib/`; `prepack`
+  asserts the required artifacts are present.
 
 ## 32. Verification and Acceptance Matrix
 
@@ -1604,13 +1625,13 @@ unnecessary after the first answer must produce no redundant question.
 
 | Gate | Statement | Status | Evidence |
 |---|---|---|---|
-| A — Host compatibility | ABG is additive and the host prompt survives | **met** | `test/integration/composition.test.js`; `verify.sh` composes the real row and proves the installed artifact binds one section, three listeners, and four tools |
+| A — Host compatibility | ABG is additive and the host prompt survives | **met** | `test/integration/composition.test.js`; `verify.sh` composes the real row and proves the installed artifact binds one section, three listeners, and five tools |
 | B — Semantic non-conflict | no module contradicts an identified host semantic | **met** | executable prompt-conformance suite; Part A's seam review |
 | C — Behavioural improvement | at least one target failure mode improves measurably against baseline | **unmet** | the only measurements ever taken were against the five-module prompt; they were deleted as superseded, so no valid number exists for the current revision |
 | D — User-attention efficiency | batching reduces interactions without suppressing critical uncertainty | **unmet** | the ledger, gate, and `abg_questions` surface are verified; the end-to-end measurement (§30.4) is not |
 | E — Information integrity | known-invalid information is no longer authoritative by default, and the D14 deletion policy is applied | **unmet** | the pre-removal measurement was deleted as superseded; needs a fresh run |
 | F — Regression resilience | compaction, resume, and fork preserve governance state | **met** | `durability-storage.test.js` (real storage stack); `agent-isolation.test.js` |
-| G — Diagnosability | mount and gate decisions are observable outside the plugin without a logger exporter | **met** | `diagnostics.test.js`; `v2-integration.test.js` channels A and B; `wiring.test.js` for the config-fault surface, `degraded[]`, and best-effort logging; `verify.sh` check 5 for the installed artifact |
+| G — Diagnosability | mount and gate decisions are observable outside the plugin without a logger exporter | **met** | `diagnostics.test.js`; `v2-integration.test.js` channels A and B; `wiring.test.js` for the config-fault surface, `degraded[]`, and best-effort logging; `verify.sh`'s installed-artifact check |
 | H — Agent isolation | two live agents in one composition never share governance state | **met** | `agent-isolation.test.js`; `state.test.js` |
 | I — Compatibility | the adapter reports a verdict and detects a simulated host section change | **met** | `compatibility.test.js`; `v2-integration.test.js` reports `COMPATIBLE` from a real assembly |
 | J — Packaging | installable, licensed, changelogged, peer-range enforced | **partial** | LICENSE, CHANGELOG, `files` allowlist, and the narrowed peer range landed; publication withheld |
@@ -1665,6 +1686,40 @@ missing approval channel. This distinction is the point of the evaluation.
 - Every claim in `eval/README.md` re-derived from the new runs; stale claims
   removed rather than kept alongside new ones.
 
+### 32.6 Evaluation cases carried from the retired implementation handoff
+
+The task and test designs of `IMPLEMENTATION-VALIDATION-HANDOFF.md` §6–§9 remain
+the case list for gates C, D, and E. They are recorded here so the handoff can
+stay a pointer.
+
+**Question consolidation (Gate D).** Scenarios: one deterministic blocker; three
+independent blockers; five blockers with dependencies; mixed deterministic and
+uncertain questions; a question rendered unnecessary by an earlier answer;
+non-blocking uncertainty that should be deferred. Metrics (home:
+[`eval/README.md`](eval/README.md)): `questions_registered`, `questions_sent`,
+`batches_sent`, `redundant_questions`, `average_questions_per_batch`,
+`user_interruption_count`, `blocked_execution_time`. `questions_generated` is
+the former name of `questions_registered`.
+
+**Information integrity (Gate E).** Cases: valid information; invalidated
+information; superseded information; contradictory sources; corrected
+information; reintroduced stale content. The decisive test is not whether the
+agent notices invalidity, but whether the invalidated information stops being
+reused as authoritative.
+
+**Workspace governance.** Cases: read-only inspection; modify an authorized
+artifact; create an explicitly authorized artifact; create an apparently useful
+but unauthorized artifact; delete an authorized artifact; delete an uncertain
+artifact; structural workspace change. Measure model compliance, runtime
+enforcement, user-approval behaviour, and the actual filesystem outcome
+separately.
+
+**Compatibility regression.** Capture per host version: host version, active
+section names, resolved ordering, the compiled ABG section, the assembled prompt
+hash, and relevant context contributions. Fail on a replaced full prompt, a
+missing ABG section, a host section collision, duplicated host semantics, a
+missing seam, or unreviewed drift; §29.4 is the implemented form.
+
 ## 33. Implementation Plan
 
 Phases are ordered by dependency. Each phase is a reviewable change set with its
@@ -1682,16 +1737,9 @@ phases build on its result.
 | P6 | Evaluation: precision and breadth | `eval/e2e.mjs`, `eval/e2e-analyze.mjs`, `eval/scenarios.mjs`, `eval/README.md` | P1–P5 | **partial** — the simulated gate-precision matrix landed (21 legitimate calls, 0 false blocks; 4 traps caught); the model-backed Gate C/E measurements and the wider evidence of §32.5 did not |
 | P7 | Packaging | `plugin/package.json`, new `plugin/LICENSE`, new `plugin/CHANGELOG.md`, `plugin/README.md` | P1 | **partial** — LICENSE, CHANGELOG, and the `files` allowlist landed, and the peer range is narrowed to the verified one; publication stays withheld while Gates C, D, and E are unverified |
 
-**Round status.** After the v0.2.0 structural round and the 2026-10-02 mount
-hardening the plugin is at `version: 0.3.0`, still `"private": true`, with
-**238 tests (all pass — no todo, no skip)**, a clean strict typecheck, and
-`scripts/verify.sh` at **11/11** (typecheck, suite, real install, row composition,
-installed-artifact execution proof, live mount). The unmet items
-are exactly the ones that need a real model in the loop: behavioural
-re-measurement (Gate C), information-integrity re-measurement (Gate E), and
-end-to-end question-consolidation measurement (Gate D, §30.4). The superseded
-five-module measurements were deleted, not annotated, so no stale number stands
-as evidence for the current revision (§23).
+**Round status is not restated here.** The current package version, test count,
+and verification result are maintained once, in
+[`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4.
 
 ### 33.1 Ordering constraints
 

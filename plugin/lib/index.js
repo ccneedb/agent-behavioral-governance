@@ -21,9 +21,12 @@ import { dirname } from 'node:path'
 
 import { resolveConfig, DEFAULT_SECTION_ORDER } from './kernel/config.js'
 import { createRegistry } from './kernel/registry.js'
-import { compilePrompt, promptStats, utf8Bytes } from './kernel/prompt-compiler.js'
-import { composePromptOverride } from './kernel/prompt-override.js'
-import { createDiagnosticsExporter } from './kernel/export.js'
+// `lib/generated/**` is the compiled JavaScript of `src/**/*.ts` (see
+// TYPESCRIPT-MIGRATION.md). These three modules are migrated; the rest of `lib/`
+// is still hand-written JavaScript.
+import { compilePrompt, promptStats, utf8Bytes } from './generated/kernel/prompt-compiler.js'
+import { composePromptOverride } from './generated/kernel/prompt-override.js'
+import { createDiagnosticsExporter } from './generated/kernel/export.js'
 import { MAX_REQUEST_BYTES, planPromptEdit, promptEditorState, submitFeedback } from './kernel/gui-actions.js'
 import { projectGovernanceModule, createProjectState, evaluateOrientationGate } from './modules/project-governance.js'
 import { informationIntegrityModule } from './modules/information-integrity.js'
@@ -96,7 +99,7 @@ export const PROMPT_VERSION = '0.2.0'
  * Declared here so a feedback report can name the build it came from without the
  * plugin reading the filesystem at runtime.
  */
-export const PLUGIN_VERSION = '0.5.0'
+export const PLUGIN_VERSION = '0.5.1'
 
 /**
  * Stable kernel invariants: the statements that hold regardless of which modules
@@ -531,11 +534,6 @@ export function apply(ctx, rawConfig) {
     guarded('diagnosticsExport', () => {
       exporter.flush(true)
     })
-    guarded('diagnosticsExport.mount', () => {
-    // The setup flush happens before the mount records exist, and the throttle
-    // then suppresses them, so the mirror would otherwise show an empty ring.
-    exporter.flush(true)
-  })
   guarded('dispose.diagnosticsExport', () => {
       ctx.effect?.(() => () => {
         exporter.close()
@@ -1140,6 +1138,12 @@ export function apply(ctx, rawConfig) {
       `section=${SECTION_NAME}@${config.sectionOrder} bytes=${stats.bytes} ` +
       `workspace=${config.workspace.policy} gate=${config.preStep.orientationGate}`,
   )
+  // The mount records exist only now, and the throttle would otherwise suppress
+  // them: flush once, here, so a mirror reader never sees an empty ring.
+  guarded('diagnosticsExport.mount', () => {
+    exporter.flush(true)
+  })
+
   if (config.diagnostics) {
     // Best effort, like every other narration call: the ring and the status
     // surface already carry this, and a logger fault must not unmount ABG.

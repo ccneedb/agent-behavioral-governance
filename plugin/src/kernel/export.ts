@@ -17,6 +17,10 @@
  * 3. **Bounded.** The payload carries at most `limit` entries, newest first.
  * 4. **Testable without a filesystem.** The actual write is injected, so the
  *    throttling, bounding, and failure paths are unit-testable.
+ *
+ * Migrated from `export.js` (2026-10-02). This is the source of truth;
+ * `lib/generated/kernel/export.js` is the `tsc` build artifact that DSH actually
+ * loads (see `TYPESCRIPT-MIGRATION.md`).
  */
 
 /** Bumped when the mirror's shape changes, so a reader can refuse a stale file. */
@@ -25,18 +29,34 @@ export const EXPORT_SCHEMA_VERSION = 1
 /** Minimum gap between writes while diagnostics stream in. */
 export const DEFAULT_EXPORT_MIN_INTERVAL_MS = 500
 
-/**
- * @param {object} input
- * @param {string} input.file - absolute or relative path; empty disables the mirror.
- * @param {number} [input.limit] - maximum diagnostic entries in the payload.
- * @param {() => Record<string, unknown>} input.snapshot - the live state to mirror.
- * @param {(path: string, text: string) => void} [input.writeFile] - injected writer.
- * @param {(message: string) => void} [input.onError]
- * @param {() => number} [input.now] - injectable clock, for tests.
- * @param {number} [input.minIntervalMs]
- * @returns {{ file: string, limit: number, flush: (force?: boolean) => boolean, close: () => void, lastError: () => string }}
- */
-export function createDiagnosticsExporter(input) {
+/** Input to {@link createDiagnosticsExporter}. */
+export interface DiagnosticsExporterInput {
+  /** Absolute or relative path; empty disables the mirror. */
+  file: string
+  /** Maximum diagnostic entries in the payload. */
+  limit?: number
+  /** The live state to mirror. */
+  snapshot: () => Record<string, unknown>
+  /** Injected writer. */
+  writeFile?: (path: string, text: string) => void
+  onError?: (message: string) => void
+  /** Injectable clock, for tests. */
+  now?: () => number
+  minIntervalMs?: number
+}
+
+/** The bounded, throttled diagnostics mirror. */
+export interface DiagnosticsExporter {
+  file: string
+  limit: number
+  /** Write now unless the throttle blocks it; `force` ignores the throttle. */
+  flush(force?: boolean): boolean
+  close(): void
+  lastError(): string
+}
+
+/** Build the opt-in diagnostics mirror. */
+export function createDiagnosticsExporter(input: DiagnosticsExporterInput): DiagnosticsExporter {
   const file = typeof input.file === 'string' ? input.file : ''
   const limit = typeof input.limit === 'number' ? input.limit : 50
   const now = input.now ?? (() => Date.now())
@@ -51,10 +71,10 @@ export function createDiagnosticsExporter(input) {
   let closed = false
 
   /**
-   * @param {boolean} [force] - ignore the throttle (mount, teardown, explicit ask).
-   * @returns {boolean} whether a write happened.
+   * @param force - ignore the throttle (mount, teardown, explicit ask).
+   * @returns whether a write happened.
    */
-  const flush = (force = false) => {
+  const flush = (force = false): boolean => {
     if (closed || file === '' || typeof writeFile !== 'function') return false
     // Re-entrancy guard: a failed write may report through the same diagnostic
     // path that triggers the next flush.

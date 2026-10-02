@@ -79,6 +79,18 @@ fi
 
 mkdir -p "$VERIFY_ROOT"
 
+# ── 0. build (TypeScript sources -> the JS artifacts the host loads) ─────────
+# `lib/generated/**` is a build artifact committed to the package. Rebuild it so
+# this gate never validates a stale artifact against newer sources.
+if grep -q '"build"' "${PLUGIN_DIR}/package.json"; then
+  step "Build the emitted artifacts"
+  if (cd "$PLUGIN_DIR" && npm run --silent build >"${VERIFY_ROOT}/build.log" 2>&1); then
+    pass "npm run build (src/**/*.ts -> lib/generated)"
+  else
+    fail "npm run build"; tail -20 "${VERIFY_ROOT}/build.log"
+  fi
+fi
+
 # ── 1. typecheck ─────────────────────────────────────────────────────────────
 step "Typecheck (strict checkJs)"
 if (cd "$PLUGIN_DIR" && npm run --silent typecheck); then pass "tsc --checkJs strict"; else fail "tsc --checkJs strict"; fi
@@ -156,7 +168,33 @@ PROBE="${VERIFY_ROOT}/probe-installed.mjs"
 cat >"$PROBE" <<'JS'
 import assert from 'node:assert/strict'
 
+import { readFileSync, existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { execFileSync } from 'node:child_process'
+import path from 'node:path'
 const abg = await import(`${process.argv[2]}/lib/index.js`)
+
+// The YAML parser belongs to the DSH installation, not to this dependency-free
+// package, and ESM `import('yaml')` cannot resolve from a throwaway verify
+// directory. Resolve it from the installed dsh entry point instead.
+function loadYaml() {
+  const bases = []
+  if (process.env.ABG_DSH_PACKAGES) bases.push(path.join(process.env.ABG_DSH_PACKAGES, '..', 'resolve-from-here.cjs'))
+  try {
+    const dsh = execFileSync('sh', ['-c', 'command -v dsh'], { encoding: 'utf8' }).trim()
+    if (dsh) {
+      let real = dsh
+      try { real = execFileSync('readlink', ['-f', dsh], { encoding: 'utf8' }).trim() || dsh } catch {}
+      bases.push(real)
+    }
+  } catch {}
+  for (const base of bases) {
+    for (const name of ['yaml', 'js-yaml']) {
+      try { return createRequire(base)(name) } catch {}
+    }
+  }
+  return null
+}
 
 function stubContext() {
   const listeners = new Map()
@@ -197,9 +235,52 @@ function stubContext() {
   return { ctx, listeners, sections, tools, logs, mountTools }
 }
 
-// (a) A valid configuration binds the whole plugin, from the installed copy.
+// (a) THE SHIPPED configuration binds the whole plugin, from the installed copy.
+// With `{}` (all defaults) a package whose own default config the plugin rejects
+// passes this gate while contributing nothing in production — which is exactly how
+// a broken 0.5.0 shipped. So apply the shipped configuration verbatim.
+let shipped = {}
+// The installed artifact carries its own patch, and probing it is the whole
+// point of this gate: resolve it from the installed package, never from this
+// throwaway verify directory (whose `..` is the repository root), and never
+// fall through to `{}` when it is missing.
+const patchPath = path.join(process.argv[2], 'cordis.patch.yml')
+assert.ok(existsSync(patchPath), `the installed artifact must ship cordis.patch.yml (looked in ${patchPath})`)
+if (existsSync(patchPath)) {
+  const YAML = loadYaml() ?? await import('yaml').catch(() => null)
+  if (YAML === null) {
+    // No YAML parser reachable from here; the suite parses the real file
+    // (test/unit/config.test.js). Mirror its shape here so the gate still fails
+    // on this class of defect: an empty path is a documented value, not an error.
+    shipped = {
+      prompt: { mode: 'compiled', append: '', file: '' },
+      diagnosticsExport: { file: '' },
+    }
+    console.log('note: `yaml` unreachable; probing the shipped config SHAPE instead')
+  } else {
+    const parse = YAML.parse ?? YAML.load
+    const parsed = parse(readFileSync(patchPath, 'utf8'))
+    const entry = (parsed[0].insert ?? parsed).find((candidate) => candidate?.id === 'abg')
+    assert.ok(entry, 'the shipped patch must insert an abg row')
+    shipped = entry.config
+    assert.ok(shipped && Object.keys(shipped).length > 0, 'the shipped abg row must carry a config block')
+    // The empty-string paths are the exact regression 0.4.0 shipped: the
+    // validator rejected `file: ''`, so the whole mount fell into the §26.2
+    // fault surface. Assert the shipped file really carries them.
+    assert.equal(shipped.prompt.file, '', 'the shipped prompt.file is the empty-string default')
+    assert.equal(shipped.diagnosticsExport.file, '', 'the shipped diagnosticsExport.file is the empty-string default')
+  }
+}
 const good = stubContext()
-abg.apply(good.ctx, {})
+assert.doesNotThrow(
+  () => abg.apply(good.ctx, shipped),
+  'the SHIPPED cordis.patch.yml must be a configuration this plugin accepts',
+)
+assert.equal(
+  good.sections.length,
+  1,
+  'the shipped config must bind the prompt section, not fall into the fault surface',
+)
 assert.equal(good.sections.length, 1, 'exactly one additive prompt section')
 assert.equal(good.sections[0].name, 'abg:governance')
 assert.equal(good.sections[0].order, 8500)
@@ -214,6 +295,13 @@ assert.deepEqual(
   good.tools.map((tool) => tool.name).sort(),
   ['abg_questions', 'abg_report_issue', 'abg_status', 'record_orientation', 'record_question'],
 )
+// Positive proof: the shipped config must ACTIVATE, not merely not throw. An
+// inert fault surface would leave `mounted: false` and a populated `degraded`.
+const goodStatus = good.tools.find((tool) => tool.name === 'abg_status')
+assert.ok(goodStatus, 'the shipped config must register the read-only status tool')
+const goodReport = await goodStatus.execute({}, {})
+assert.equal(goodReport.mount.mounted, true, 'the shipped config must ACTIVATE (mounted: true)')
+assert.deepEqual(goodReport.mount.degraded ?? [], [], 'the shipped config must mount with no degraded capability')
 
 // (b) §26.2: a bad configuration does not throw and stays observable.
 const bad = stubContext()

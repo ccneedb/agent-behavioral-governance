@@ -21,25 +21,24 @@
  * The soft invariants the conformance suite normally enforces cannot be checked
  * on arbitrary user text; that is reported as `unchecked` so no caller can
  * present a user-edited prompt as an audited one.
+ *
+ * Migrated from `prompt-override.js` (2026-10-02). This is the source of truth;
+ * `lib/generated/kernel/prompt-override.js` is the `tsc` build artifact that DSH
+ * actually loads (see `TYPESCRIPT-MIGRATION.md`).
  */
 
 import { containsInterpolationSyntax, utf8Bytes, DEFAULT_MAX_PROMPT_BYTES } from './prompt-compiler.js'
 
 /** Invariants the conformance suite enforces on the compiled default but cannot enforce on user text. */
-export const UNCHECKED_INVARIANTS = Object.freeze([
+export const UNCHECKED_INVARIANTS: readonly string[] = Object.freeze([
   'no duplicated statements between modules (§5.2)',
   'no authority claim over the user or the host',
   'no implementation detail leaking into model-facing text',
   'no restatement of a rule the plugin enforces deterministically',
 ])
 
-/**
- * FNV-1a, base36. Attribution only — never a security primitive.
- *
- * @param {string} text
- * @returns {string}
- */
-export function shortHash(text) {
+/** Attribution hash, FNV-1a base36. Never a security primitive. */
+export function shortHash(text: string): string {
   let hash = 0x811c9dc5
   for (let index = 0; index < text.length; index += 1) {
     hash ^= text.charCodeAt(index)
@@ -48,29 +47,39 @@ export function shortHash(text) {
   return hash.toString(36).padStart(7, '0')
 }
 
-/**
- * Compose the governance section for the configured prompt mode.
- *
- * @param {object} input
- * @param {'compiled' | 'append' | 'replace'} input.mode
- * @param {string} [input.append] - extra guidance for `append` mode.
- * @param {string} [input.overrideText] - file contents for `replace` mode.
- * @param {string} input.basePrompt - the audited compiled section.
- * @param {boolean} [input.allowOverBudget]
- * @param {number} [input.maxBytes]
- * @returns {{ text: string, applied: boolean, versionSuffix: string, issues: string[], unchecked: string[] }}
- */
-export function composePromptOverride(input) {
+/** Input to {@link composePromptOverride}. */
+export interface ComposePromptOverrideInput {
+  mode: 'compiled' | 'append' | 'replace'
+  /** Extra guidance for `append` mode. */
+  append?: string
+  /** File contents for `replace` mode. */
+  overrideText?: string
+  /** The audited compiled section. */
+  basePrompt: string
+  allowOverBudget?: boolean
+  maxBytes?: number
+}
+
+/** Result of {@link composePromptOverride}: the effective text and why it is that text. */
+export interface PromptOverrideResult {
+  text: string
+  applied: boolean
+  versionSuffix: string
+  issues: string[]
+  unchecked: string[]
+}
+
+/** Compose the governance section for the configured prompt mode. */
+export function composePromptOverride(input: ComposePromptOverrideInput): PromptOverrideResult {
   const base = input.basePrompt
   const maxBytes = input.maxBytes ?? DEFAULT_MAX_PROMPT_BYTES
-  /** @type {string[]} */
-  const issues = []
+  const issues: string[] = []
 
   if (input.mode === 'compiled') {
     return { text: base, applied: false, versionSuffix: '', issues, unchecked: [] }
   }
 
-  let candidate
+  let candidate: string
   if (input.mode === 'append') {
     const extra = (input.append ?? '').trim()
     if (extra === '') {

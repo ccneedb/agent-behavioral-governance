@@ -55,7 +55,7 @@ the problem it closes and is covered by the suite.
 | Gate precision | A matrix of 21 legitimate calls plus the declared traps measures `false_block_rate`, `false_blocks`, and `true_blocks` | `MAINTENANCE-HANDOFF` §4 blocker 3; `ARCHITECTURE-SPEC` §32.4, in [`test/integration/gate-precision.test.js`](test/integration/gate-precision.test.js) |
 | Packaging | `LICENSE` (MIT), `CHANGELOG.md`, and a `files` allowlist that ships both | `MAINTENANCE-HANDOFF` §4 blocker 6; **Gate J** |
 
-The package is now `version: 0.3.0` and remains `"private": true`; the peer range
+The package is now `version: 0.5.0` and remains `"private": true`; the peer range
 is narrowed to the verified one (`>=0.2.0-rc.2 <0.3.0`). Removing `private` and
 choosing the publish target are the release decision
 (`ARCHITECTURE-SPEC` §31.1, §34.2 Q5) and are withheld until the model-backed
@@ -273,13 +273,112 @@ I/O at all), throttled to one write per 500 ms, written via a temporary file and
 rename, and fails open: an unwritable path is reported once per window as
 `abg.diagnostics_export_failed` and never affects enforcement.
 
+## Install, update, and uninstall
+
+ABG is installed **into one DSH profile**, never globally, and never into a
+profile you rely on while the behavioural gates are unmeasured. The canonical
+artifact is the npm tarball that `npm pack` produces (the release workflow
+attaches it to the GitHub release).
+
+### The package-manager limitation, first
+
+`dsh plugin --profile <p> add|remove ...` forwards **everything after `plugin`
+verbatim to pnpm** — the host hard-codes the package manager. A real install
+prints, for example:
+
+```text
+Done in 25ms using pnpm v12.8.1
+```
+
+Two consequences:
+
+- a machine without pnpm cannot use `dsh plugin` at all (the error is
+  `dsh: pnpm was not found; install pnpm and make it available on PATH.`);
+- everything after `plugin` must be a pnpm argument, so launcher flags such as
+  `--from-default-profile`, `--dump-config`, or `--patch` belong **before**
+  `plugin` and never after it.
+
+`dsh plugin add` also does a second thing outside the package manager: it
+registers the new package name in the profile manifest's `dsh.profile.bundles`
+list. That list — not `node_modules` — is what makes DSH compose the `abg` row.
+Plain `npm install` does not know about it, so an npm-only install leaves the
+package on disk but **not mounted**. The helper below performs both steps.
+
+### npm-native path (no pnpm required)
+
+From a clone, with `npm`, `node` (>= 20), and `dsh` on `PATH`:
+
+```bash
+# install (packs this repository's plugin/ with `npm pack`)
+./scripts/abg-npm.sh install --profile abg-test
+
+# or install a release tarball you downloaded
+./scripts/abg-npm.sh install --profile abg-test \
+  --from dsh-agent-behavioral-governance-0.5.0.tgz
+
+# is it mounted?
+./scripts/abg-npm.sh status --profile abg-test
+
+# update to a newer tarball
+./scripts/abg-npm.sh update --profile abg-test --from dsh-agent-behavioral-governance-0.6.0.tgz
+
+# uninstall
+./scripts/abg-npm.sh uninstall --profile abg-test
+```
+
+`scripts/abg-npm.sh` is POSIX `sh`, has no dependencies beyond `node`/`npm`/`dsh`,
+fails loudly, and is safe to run twice. It refuses to write to the live
+`$HOME/.dsh` unless `--allow-live` (or `ABG_NPM_ALLOW_LIVE=1`) is given;
+`status` is read-only. Its `--home <dir>` flag points it at any DSH home, which
+is how the lifecycle check and CI keep the live profile untouched.
+
+Beyond `npm install` / `npm uninstall`, the helper does the three things npm
+does not:
+
+1. it copies a local tarball into `<profile>/.abg-artifacts/` and installs that
+   copy, so the recorded dependency is a stable
+   `file:.abg-artifacts/<name>.tgz` instead of a relative path back into the
+   source tree or download directory;
+2. after install it appends the package name to `dsh.profile.bundles`;
+3. after uninstall it removes that entry — npm leaves it behind, and DSH then
+   prints `dsh: skipping profile bundle "dsh-agent-behavioral-governance"` on
+   every boot.
+
+### Upgrading a pnpm-installed profile to npm
+
+A pnpm-installed profile has `pnpm-lock.yaml`; npm writes `package-lock.json`.
+Each manager ignores the other's lockfile, and mixing does not break composition:
+after `npm install` into a pnpm profile, `dsh --dump-config` still composes the
+`abg` row and `dsh plugin remove` still works (and cleans `dsh.profile.bundles`).
+To move a profile to npm, either uninstall first or install over the top:
+
+```bash
+./scripts/abg-npm.sh uninstall --profile abg-test   # or:
+./scripts/abg-npm.sh install --profile abg-test --from <tarball>
+```
+
+Both were verified against a pnpm-installed profile. Prefer one manager per
+profile: the other manager's lockfile is left **stale** after the switch (it
+still names the package until that manager next runs), so delete the lockfile
+you no longer use. A stale `package-lock.json` is pruned by the next plain
+`npm install`.
+
+### npm registry publication
+
+**Not authorised.** The package is `"private": true` and is not published to
+the npm registry; `npm install <name>` from a registry therefore does not work
+today. Distribution is the release tarball (or a clone). `npm pack` remains the
+canonical artifact producer, and the release workflow builds and attaches that
+tarball. Removing `private` and choosing a publish target are release decisions
+withheld until the model-backed gates pass (`ARCHITECTURE-SPEC` §31.1, §34.2 Q5).
+
 ## Verification
 
 ```bash
 cd plugin
-npm run typecheck     # tsc --checkJs, strict, against the ambient seam contract
-npm test              # node --test (unit + integration) — 238 tests, no todo
-./scripts/verify.sh   # the full evidence chain (11 checks), real profile install
+npm run build         # src/**/*.ts -> lib/generated (build artifacts the host loads)
+\1npm test              # node --test (unit + integration) — 265 tests, no todo
+./scripts/verify.sh   # the full evidence chain (12 checks), real profile install
 ```
 
 `npm test` runs two layers:

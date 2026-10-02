@@ -1,3 +1,14 @@
+---
+doc_type: template
+project: agent-behavioral-governance
+version: 0.1.0
+status: active
+owner: maintainers
+last_reviewed: 2026-10-02
+audience: users + maintainers
+language: en
+---
+
 # ABG Task-Failure Report Template
 
 Use this when ABG's governance produced a wrong outcome during real work — it
@@ -23,7 +34,8 @@ cannot be triaged. One failure per report. Report ID: `ABG-<YYYYMMDD>-<NNN>`.
 - [ ] `abg_status` was called and its JSON pasted in §4 (if ABG mounted at all).
 - [ ] The failure reproduces with ABG disabled (`enabled: false` or the abg-off overlay).
       -> If NO: it is a host/environment issue, not ABG.
-- [ ] The failure is not in the "Known limitations" list in §12.
+- [ ] The failure is not in the accepted-limits list (SECURITY.md §Known
+      limitations; summarized in §12).
 - [ ] I removed credentials, tokens, and private file contents from all pasted evidence.
 
 ## 1. Reporter and environment
@@ -34,7 +46,7 @@ cannot be triaged. One failure per report. Report ID: `ABG-<YYYYMMDD>-<NNN>`.
 - DSH version (`dsh -V`):                 # verified baseline 0.2.0-rc.2
 - DSH_HOME in use:                        # absolute path
 - Profile name (e.g. web):
-- ABG version (`plugin/package.json`):    # verified 0.2.0
+- ABG version (`plugin/package.json`):    # verified 0.5.0
 - PROMPT_VERSION (`abg_status.mount.promptVersion`):
 - Install method: [ ] file: path  [ ] other:
 - Re-installed after the last source change? [ ] yes [ ] no [ ] n/a
@@ -118,21 +130,10 @@ Paste the full `abg_status` result verbatim:
 - [ ] Session logs redacted for user content if your policy requires it.
 
 ## 12. Known limitations that are NOT bugs (do not file these)
-1. `agent/pre-step` live dispatch is not verified against a live agent loop.
-2. `ask_user_question` consolidation (Gate D) is unmeasurable in a headless
-   composition with no answerer.
-3. Behavioural improvement (Gates C/D/E) has no valid measurement for the current
-   four-module prompt.
-4. With no `ctx.storageDomain`, orientation does not survive a resume; ABG
-   degrades to in-memory state and re-imposes the requirement.
-5. Shell-write classification misses indirect wrappers (`env bash -c '…'`) and
-   PowerShell `Remove-Item`.
-6. `workspace.policy: 'ask'` and `overlapCheck: 'ask'` fail closed where no
-   approval channel exists.
-7. `degraded[]` non-empty and `mounted: true` can coexist: read `degraded`, not
-   `mounted` alone.
-8. Log narration (`ctx.logger`) is best-effort and may be invisible in stock
-   compositions — always attach the `abg_status` ring instead.
+
+The authoritative list is maintained once in SECURITY.md §Known limitations and is
+not restated here. Read it before filing. A Gate C, D, or E measurement is not a
+"not a bug" report: it is the evidence this project is missing.
 
 ## 13. Triage outcome (maintainers only)
 - Reproduced? [ ] yes [ ] no

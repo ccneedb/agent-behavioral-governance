@@ -13,8 +13,16 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["lib"],
-  // The Web GUI bundle is a hand-authored browser artifact (lazy-CJS envelope,
-  // baseline `require`, browser globals), not Node source; it is not typechecked.
-  "exclude": ["lib/client.js"]
+  "include": ["lib", "src"],
+  "exclude": [
+    // The Web GUI bundle is a hand-authored browser artifact (lazy-CJS envelope,
+    // baseline `require`, browser globals), not Node source; it is not typechecked.
+    "lib/client.js",
+    // `lib/generated/**` is the `tsc` build output of `src/**/*.ts`
+    // (`tsconfig.build.json`). It is excluded here because emitted JavaScript
+    // must not re-enter the `checkJs` program; its `.d.ts` siblings are still
+    // resolved as dependencies of `lib/**/*.js`. Rebuild with
+    // `npm run build` after editing `src/` — see TYPESCRIPT-MIGRATION.md.
+    "lib/generated"
+  ]
 }

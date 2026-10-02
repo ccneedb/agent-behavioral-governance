@@ -36,12 +36,27 @@ jobs:
       # declared as a runtime dependency.
       - name: Install TypeScript
         run: npm install --global typescript
+      - name: Build the migrated TypeScript sources
+        working-directory: plugin
+        run: npm run build
       - name: Typecheck (strict checkJs)
         working-directory: plugin
         run: npm run typecheck
       - name: Unit, conformance, and portable integration tests
         working-directory: plugin
         run: node --test
+
+  # Documentation health. Zero dependencies: the checker is POSIX sh and uses only
+  # base utilities, so it runs on the stock runner. It fails on a broken relative
+  # link, missing owner/last_reviewed front matter, a document absent from
+  # docs/DOCUMENTATION-INDEX.md, or an unparsable last_reviewed date.
+  docs:
+    name: documentation health
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check links, front matter, and index coverage
+        run: ./scripts/check-docs.sh
 
   # Best-effort. Installs the pinned DeepSeek Harness host and runs the full
   # evidence chain, which is the real release gate: a throwaway profile install,
@@ -67,6 +82,6 @@ jobs:
           DSH_PACKAGES="$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai"
           test -d "$DSH_PACKAGES" || { echo "host layout not found at $DSH_PACKAGES"; exit 1; }
           echo "ABG_DSH_PACKAGES=$DSH_PACKAGES" >> "$GITHUB_ENV"
-      - name: Full verification chain (11 checks)
+      - name: Full verification chain
         working-directory: plugin
         run: ./scripts/verify.sh

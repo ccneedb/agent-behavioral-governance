@@ -36,3 +36,13 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Scratch trees used by one-off verification runs. Swept up by `git add -A`
+# once; never commit them.
+.packtest/
+.packtest-cache/
+.abg-item1/
+.abg-verify*/
+.npm-verify/
+.tsprobe/
+.migration-probe/

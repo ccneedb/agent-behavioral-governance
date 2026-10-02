@@ -101,6 +101,32 @@ function requireString(value, path) {
 }
 
 /**
+ * Assert a value is a string, **allowing the empty string**.
+ *
+ * Path-valued fields use this: `''` is a documented value meaning "none
+ * configured" (`prompt.file` when `prompt.mode` is not `replace`;
+ * `diagnosticsExport.file` meaning "off, do no file I/O"). Validating them with
+ * `requireString` made the **shipped** `cordis.patch.yml` fail this plugin's own
+ * validation, so `apply()` fell into the §26.2 fault surface and the plugin
+ * contributed nothing at all — no prompt section, no hooks, no tools, no GUI
+ * route — while the host reported nothing. Whitespace-only values are still
+ * rejected: they are always a typo, never an intentional "none".
+ *
+ * @param {unknown} value
+ * @param {string} path
+ * @returns {string}
+ */
+function requireOptionalPath(value, path) {
+  if (typeof value !== 'string') {
+    throw new AbgConfigError(`"${path}" must be a string`)
+  }
+  if (value !== '' && value.trim() === '') {
+    throw new AbgConfigError(`"${path}" must be a path or an empty string`)
+  }
+  return value
+}
+
+/**
  * Assert a value is a boolean.
  *
  * @param {unknown} value
@@ -279,7 +305,7 @@ export function resolveConfig(raw) {
   if (rawPrompt.append !== undefined && typeof rawPrompt.append !== 'string') {
     throw new AbgConfigError('"prompt.append" must be a string')
   }
-  const promptFile = rawPrompt.file === undefined ? '' : requireString(rawPrompt.file, 'prompt.file')
+  const promptFile = rawPrompt.file === undefined ? '' : requireOptionalPath(rawPrompt.file, 'prompt.file')
   if (promptMode === 'replace' && promptFile === '') {
     throw new AbgConfigError('"prompt.file" is required when "prompt.mode" is "replace"')
   }
@@ -305,7 +331,7 @@ export function resolveConfig(raw) {
   rejectUnknownKeys(rawExport, DIAGNOSTICS_EXPORT_KEYS, 'diagnosticsExport.')
   const diagnosticsExport = Object.freeze({
     // Empty path means "off": the plugin does no file I/O unless asked.
-    file: rawExport.file === undefined ? '' : requireString(rawExport.file, 'diagnosticsExport.file'),
+    file: rawExport.file === undefined ? '' : requireOptionalPath(rawExport.file, 'diagnosticsExport.file'),
     limit: rawExport.limit === undefined ? 50 : (() => {
       const value = rawExport.limit
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 200) {

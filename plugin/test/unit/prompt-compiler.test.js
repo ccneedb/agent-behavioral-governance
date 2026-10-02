@@ -10,7 +10,7 @@ import {
   PROMPT_BYTE_FLOOR,
   PROMPT_BYTE_HARD_CAP,
   RECORDED_PROMPT_BYTES,
-} from '../../lib/kernel/prompt-compiler.js'
+} from '../../lib/generated/kernel/prompt-compiler.js'
 import { MODULES, KERNEL_PRINCIPLES, buildGovernance } from '../../lib/index.js'
 
 /** @param {Partial<GovernanceModule> & { id: string }} overrides */

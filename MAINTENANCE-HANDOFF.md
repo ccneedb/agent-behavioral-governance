@@ -1,27 +1,26 @@
 ---
 doc_type: maintenance-handoff
 project: agent-behavioral-governance
-plugin_version: 0.1.0
-status: in-progress-not-production-ready
+plugin_version: 0.5.0
+version: 0.5.0
+status: active
+owner: maintainers
+last_reviewed: 2026-10-02
 host_baseline_verified: dsh-0.2.0-rc.2
 supersedes: none
-superseded_in_part_by: architecture-spec-part-b-target-design-abg-0.2.0
 language: en
 ---
 
 # ABG Maintenance Handoff
 
-> **Superseded in part (v0.2.0).** This handoff remains the honest record of the
-> `0.1.0` prototype. The forward design is
-> `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` **Part B** (§§22–34), which closes the
-> blockers below. The remaining blockers are carried into Part B, and the open
-> design decisions are consolidated in its §34.2.
+> **This is the maintained status record (package 0.5.0).** §3–§4 are the single
+> source of truth for current status and numbers; other documents link here rather
+> than restate them. The `0.1.0` and v0.2.0 rounds are retained below as history.
 
-> **Read this first.** Testing was suspended for context reasons, not because the
-> work is finished. ABG — the sanctioned short form for
-> `dsh-agent-behavioral-governance` — is **not production-ready**; the blockers
-> are listed in §4 and are the reason a release handoff was withheld. Everything
-> in §3 is verified and reproducible; everything in §4 is not.
+> **Read this first.** ABG — the sanctioned short form for
+> `dsh-agent-behavioral-governance` — is **not production-ready**; the open
+> blockers are in §4. Everything in §3 is verified and reproducible; everything
+> in §4 is not.
 
 ## 1. What this is
 
@@ -34,30 +33,29 @@ enforces through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
 |---|---|
 | [`PRODUCT-SPEC.md`](PRODUCT-SPEC.md) | positioning, scope, goals, success criteria |
 | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md) | architecture; **§17 source-verified host seams**, **§18 deltas D1–D15**, §20 assumptions |
-| [`IMPLEMENTATION-VALIDATION-HANDOFF.md`](IMPLEMENTATION-VALIDATION-HANDOFF.md) | original build order and acceptance gates |
+| [`IMPLEMENTATION-VALIDATION-HANDOFF.md`](IMPLEMENTATION-VALIDATION-HANDOFF.md) | retired — pointer to the §32 gates and the historical build order |
 | [`plugin/`](plugin/README.md) | the implementation |
 | [`eval/`](eval/README.md) | behavioural and end-to-end evaluation |
 
 ## 2. Run everything
 
-```bash
-cd plugin
-npm run typecheck      # tsc --checkJs, strict, via the ambient contract in lib/contract.d.ts
-npm test               # node --test — 238 tests (all pass; no todo, no skip)
-./scripts/verify.sh    # 11 checks: typecheck, tests, install, composition, execution proof, mount
-```
-
-Behavioural evaluation (costs model calls, uses an isolated `DSH_HOME`):
+The full check set and the commands that run it are maintained once, in
+[`CONTRIBUTING.md`](CONTRIBUTING.md) §Running the checks. Behavioural evaluation
+(costs model calls, uses an isolated `DSH_HOME`) is documented in
+[`eval/README.md`](eval/README.md); its entry points are:
 
 ```bash
 node eval/e2e.mjs 4 auth-doc-request   # 8 real agent runs, re-installs first
 node eval/e2e-analyze.mjs              # derives ordering from tool/call events
 ```
 
-## 3. Verified state
+## 3. Verified state (single source of truth for status and numbers)
 
-**Mechanisms — 238 tests (all pass, no todo, no skip) and 11/11 verification checks at the
-v0.2.0 structural round; 159 tests at the `0.1.0` record below.** Integration tests
+**Mechanisms — 265 tests (all pass, no todo, no skip) and 12/12 verification checks
+(derived 2026-10-02 from the current tree); 238 tests at the v0.2.0 structural
+round; 159 tests at the `0.1.0` record below.** Re-derive with `npm test` and
+`plugin/scripts/verify.sh`; the counts move with each round, and this is the only
+place they are stated. Integration tests
 mount the real `dsh-system-prompt`, `dsh-tools`, `dsh-fs-local`, and the
 `dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack — not mocks.
 
@@ -81,14 +79,14 @@ fault mounts an inert but observable surface (`mounted: false`, `configError`,
 `abg.config_invalid`) instead of being reported by the host as an unactivated
 entry, each capability is registered in its own guarded step, an absent seam is
 recorded as `abg.capability_missing` and listed in the mount record's `degraded[]`,
-and logger narration is best-effort. Covered by four tests in
+and logger narration is best-effort. This is covered by four tests in
 `test/integration/wiring.test.js` and proven against the **installed** artifact by
-`verify.sh` check 5.
+`verify.sh`'s installed-artifact check.
 
 ## 4. Not verified — the blockers
 
-Status as of the v0.2.0 structural round. A blocker marked **closed** keeps its
-entry so the record of what was wrong survives; the mechanism and its test are
+Status as of the v0.5.0 GUI round (2026-10-02). A blocker marked **closed** keeps
+its entry so the record of what was wrong survives; the mechanism and its test are
 named.
 
 1. **Diagnostics are invisible — closed.** A bounded ring, the `abg:status`
@@ -106,7 +104,8 @@ named.
 4. **Module 3 (`user-attention`) behavioural validation is structurally blocked in
    headless — open.** A headless composition has no question answerer, so
    `ask_user_question` is never reached and batching cannot be measured there.
-   Part B §30.4 specifies the scripted answerer that unblocks it.
+   The §30.4 scripted answerer has landed (`eval/answerer/`); the end-to-end
+   measurement it unblocks has not.
 5. **Behavioural evidence does not exist for the current revision — open.** The
    only measurements ever taken were against the five-module prompt and were
    deleted as superseded. Gates C, D, and E therefore need a fresh `eval/` run,
@@ -157,24 +156,20 @@ durability         ctx.storageDomain                 per-session orientation
 
 ## 6. Configuration surface
 
-```yaml
-- id: abg
-  config:
-    enabled: true
-    sectionOrder: 8500
-    workspace:
-      policy: ask                    # allow | ask | deny
-      mutatingTools: [write, edit, str_replace_editor]
-      protectedPaths: []
-      overlapCheck: ask              # off | ask | deny
-      classifyShellCommands: true    # classify shell writes from command text
-    preStep:
-      orientationGate: off           # off | warn | reject
-      requireBeforeMutation: false   # opt-in; true refuses the first write (§34.2 Q1)
-    userAttention:
-      enforceBatchCompleteness: true
-    diagnostics: true
+The authoritative key/value documentation is
+[`plugin/README.md`](plugin/README.md) §Configuration; the validator in
+`plugin/lib/kernel/config.js` is the executable truth. Top-level keys:
+
+```text
+enabled  sectionOrder  modules  workspace  preStep  userAttention
+feedback  prompt  gui  diagnostics  diagnosticsExport
 ```
+
+Defaults a maintainer must not change silently: `workspace.policy: ask`,
+`workspace.overlapCheck: ask`, `preStep.orientationGate: off`,
+`preStep.requireBeforeMutation: false`, `diagnostics: true`, and
+`feedback.enabled: true` in inert `url` mode. Non-intrusive defaults are the
+documented decision (§34.2 Q1); strict enforcement is an explicit opt-in.
 
 ## 7. Environment and process gotchas
 
@@ -196,6 +191,13 @@ These each cost real time. Do not rediscover them.
   in, and `dsh --profile <name> --dump-config` needs **write** access to that
   profile directory (it materialises a temporary `cordis.yml`), so a sandboxed or
   read-only `DSH_HOME` yields "unverified" rather than a false negative.
+- **The Web GUI panel exists only in a Web-profile run.** A profile created from
+  the `headless` template mounts no web server or client substrate, so no panel
+  can attach there regardless of install success. To see the panel, install ABG
+  into the profile actually run as a Web app and start that profile. If ABG fails
+  to configure it mounts nothing and the panel reports "ABG status is unavailable",
+  with the cause recorded as the `abg.config_invalid` diagnostic;
+  `scripts/check-install.sh <profile>` distinguishes that from a profile mismatch.
 - **An installed profile links the plugin at install time.** Re-running validation
   after a source change silently exercises the *old* code. This produced a
   misleading result once. `eval/e2e.mjs` now re-installs before running; do the
@@ -285,12 +287,13 @@ re-investigate it as a side effect of this work.
 
 ## 12. Workspace layout and regeneration
 
-The tree is trimmed to sources, documents, and regenerable scaffolding. It
-currently measures **≈ 3.2 MB**.
+The tree is trimmed to sources, documents, and regenerable scaffolding. Its size
+is deliberately not recorded here: it is dominated by regenerable artifacts and
+changes with each run — measure it with `du -sh .` instead of trusting a number.
 
-> **Currency note (2026-10-02).** The size, tree, and "deliberately absent"
-> table below were written during the `0.1.0` hygiene pass and several of their
-> statements no longer hold: the tree is 3.2 MB rather than 0.7 MB;
+> **Currency note (2026-10-02).** The tree and "deliberately absent" table below
+> were written during the `0.1.0` hygiene pass and several of their statements no
+> longer hold: the tree is much larger than the 0.7 MB recorded at the time;
 > `.abg-e2e/dsh-home/` is present again, although its staged `.credentials.yaml`
 > has since been deleted; `.pnpm-store/` is present again at the repository root;
 > and `eval/runs/` exists again with partial `question-consolidation` runs. The
@@ -299,11 +302,17 @@ currently measures **≈ 3.2 MB**.
 > create the store and has no teardown.
 
 ```text
-├── README.md                             index and evidence-chain summary
-├── PRODUCT-SPEC.md                       positioning and success criteria
-├── ARCHITECTURE-SPEC-AGENT-REFERENCE.md  architecture; §18 holds deltas D1–D15
-├── IMPLEMENTATION-VALIDATION-HANDOFF.md  original build order and gates
-├── MAINTENANCE-HANDOFF.md                this file
+├── README.md                             entry point and evidence-chain summary
+├── PRODUCT-SPEC.md                       positioning, scope, success criteria
+├── ARCHITECTURE-SPEC-AGENT-REFERENCE.md  architecture; §17 seams, §18 deltas, §32 gates
+├── IMPLEMENTATION-VALIDATION-HANDOFF.md  retired pointer to §32 and the build order
+├── MAINTENANCE-HANDOFF.md                this file — current status and numbers
+├── TESTING.md                            volunteer install, trial, and feedback
+├── SECURITY.md                           boundaries, known limitations, reporting
+├── CONTRIBUTING.md                       process contract and the checks to run
+├── CODE_OF_CONDUCT.md                    Contributor Covenant 2.1
+├── scripts/                              check-install.sh, check-docs.sh
+├── docs/                                 documentation index and report template
 ├── plugin/                               the implementation (source, tests, config)
 │   ├── lib/                              kernel and the four governance modules
 │   ├── test/                             unit, conformance, and integration suites

@@ -12,6 +12,11 @@
 #         ./scripts/check-install.sh            # uses $DSH_PROFILE, else 'web'
 # Env:    DSH_BIN (default: dsh), DSH_HOME (default: ~/.dsh)
 #
+# It also answers the two follow-ups that decide whether a panel can appear at
+# all: whether THIS profile is able to host the Web GUI (a headless profile has no
+# web app, so no panel exists there by construction), and which other profiles
+# already have ABG installed.
+#
 # Read-only with one caveat: `dsh --dump-config` materialises a temporary
 # `cordis.yml` inside the profile directory, so that directory must be writable
 # by the user running this script. Where it is not (a sandboxed or read-only
@@ -44,7 +49,9 @@ printf '\n'
 installed=no
 referenced=no
 composes=unknown
+gui=unknown
 version=''
+PROFILES_DIR="${DSH_HOME}/profiles"
 
 if [ ! -d "$PROFILE_DIR" ]; then
   printf '  [x] profile directory does not exist: %s\n' "$PROFILE_DIR"
@@ -97,16 +104,60 @@ else
     sed -n '1,3p' "$DUMP_ERR" | sed 's/^/       /'
   fi
 fi
+
+# 4. Can this profile host the Web GUI at all? A headless profile has no web app,
+#    so no panel can appear there however the plugin is installed.
+if [ -f "$DUMP" ] && [ -s "$DUMP" ]; then
+  if grep -qE 'dsh-web-app|dsh-host-webserver' "$DUMP"; then
+    gui=yes
+    printf '  [ok] this profile can host the Web GUI (a web app is composed)\n'
+  else
+    gui=no
+    printf '  [x]  this profile has no web app: it cannot show a GUI panel\n'
+  fi
+fi
 rm -f "$DUMP" "$DUMP_ERR"
+
+# 5. Which other profiles already have ABG installed, and can they show a panel?
+sibling_installed=''
+sibling_gui=''
+for dir in "${PROFILES_DIR}"/*/; do
+  [ -d "$dir" ] || continue
+  name="$(basename "$dir")"
+  [ "$name" = "$PROFILE" ] && continue
+  [ -f "${dir}node_modules/${PACKAGE}/package.json" ] || continue
+  sibling_installed="${sibling_installed}${name} "
+  if grep -q 'dsh-web-app' "${dir}package.json" 2>/dev/null; then
+    sibling_gui="${sibling_gui}${name} "
+  fi
+done
+if [ -n "$sibling_installed" ]; then
+  printf '  [i]  ABG is also installed in: %s\n' "$sibling_installed"
+  [ -n "$sibling_gui" ] && printf '       of those, Web-capable: %s\n' "$sibling_gui"
+fi
 
 printf '\n'
 if [ "$installed" = "yes" ] && [ "$composes" = "yes" ]; then
-  printf 'VERDICT: ABG WILL LOAD — in profile "%s" only.\n' "$PROFILE"
-  printf '  DSH lists the bundles of the profile you RUN. If your app/GUI runs a\n'
-  printf '  different profile, ABG correctly will not appear there. To use it:\n'
-  printf '    %s --profile %s "<task>"        # then call the abg_status tool\n' "$DSH_BIN" "$PROFILE"
-  printf '  or install into the profile you actually run:\n'
-  printf '    %s plugin --profile <that-profile> add "<package reference>"\n' "$DSH_BIN"
+  if [ "$gui" = "yes" ]; then
+    printf 'VERDICT: ABG WILL LOAD, and the Web GUI panel is available in profile "%s".\n' "$PROFILE"
+    printf '  Start that profile as the Web app and open the ABG entry in the sidebar:\n'
+    printf '    %s --profile %s\n' "$DSH_BIN" "$PROFILE"
+    printf '  If the panel says "ABG status is unavailable", the plugin mounted nothing:\n'
+    printf '  a config value it rejects disables it silently, so check the installed\n'
+    printf '  version is 0.5.1 or later.\n'
+  else
+    printf 'VERDICT: ABG WILL LOAD in profile "%s", but that profile cannot show the panel.\n' "$PROFILE"
+    printf '  It composes no web app, so\n'
+    printf '    %s --profile %s "<task>"\n' "$DSH_BIN" "$PROFILE"
+    printf '  is a headless run: there is no GUI in that process, so no panel can appear,\n'
+    printf '  however the plugin is installed. Install it into a profile you run as the\n'
+    printf '  Web app, then start that profile:\n'
+    printf '    %s plugin --profile <web-profile> add "<package reference>"\n' "$DSH_BIN"
+    printf '    %s --profile <web-profile>\n' "$DSH_BIN"
+    [ -n "$sibling_gui" ] && printf '  Already Web-capable with ABG installed: %s\n' "$sibling_gui"
+  fi
+  printf '  DSH lists the bundles of the profile you RUN, so installing into one profile\n'
+  printf '  while running another looks exactly like a failed install.\n'
   exit 0
 fi
 
@@ -122,6 +173,10 @@ fi
 if [ "$installed" = "no" ] && [ "$referenced" = "no" ]; then
   printf 'VERDICT: NOT INSTALLED in profile "%s".\n' "$PROFILE"
   printf '    %s plugin --profile %s add "<package reference>"\n' "$DSH_BIN" "$PROFILE"
+  if [ -n "$sibling_gui" ]; then
+    printf '  Note: it IS installed in %s — if you are running one of those, ABG is\n' "$sibling_gui"
+    printf '  already active there and this profile is simply a different one.\n'
+  fi
   exit 1
 fi
 

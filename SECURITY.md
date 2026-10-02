@@ -1,3 +1,14 @@
+---
+doc_type: security-policy
+project: agent-behavioral-governance
+version: 0.1.0
+status: active
+owner: maintainers
+last_reviewed: 2026-10-02
+audience: everyone
+language: en
+---
+
 # Security Policy
 
 ## Project status
@@ -56,7 +67,12 @@ durable record shape and the compiled prompt are versioned, a security-relevant
 change will be recorded in [`plugin/CHANGELOG.md`](plugin/CHANGELOG.md) with the
 problem it addresses.
 
-## Known limitations that are not vulnerabilities
+## Known limitations (not vulnerabilities, not bugs)
+
+This is the single home for the accepted-limits list. [`TESTING.md`](TESTING.md) §7
+and [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](docs/TASK-FAILURE-REPORT-TEMPLATE.md) §12
+link here rather than restating it; the design-level boundaries are in
+[`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §34.3.
 
 1. `agent/pre-step` live dispatch is exercised by wiring and decision-shape
    tests, not by a full agent loop.

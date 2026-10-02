@@ -14,7 +14,7 @@ import {
   DEFAULT_EXPORT_MIN_INTERVAL_MS,
   EXPORT_SCHEMA_VERSION,
   createDiagnosticsExporter,
-} from '../../lib/kernel/export.js'
+} from '../../lib/generated/kernel/export.js'
 
 /**
  * @param {object} [overrides]

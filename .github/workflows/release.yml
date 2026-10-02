@@ -1,0 +1,90 @@
+name: Release artifact
+
+# Builds the canonical npm tarball with `npm pack` and attaches it to the
+# GitHub release, so a volunteer can install ABG with no git clone:
+#
+#   dsh plugin --profile abg-test add \
+#     "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.5.0/dsh-agent-behavioral-governance-0.5.0.tgz"
+#
+# Publication to the **npm registry is NOT performed and NOT authorised**: the
+# package stays `"private": true` until the model-backed gates pass and the
+# publish target is chosen (ARCHITECTURE-SPEC §31.1, §34.2 Q5). The release
+# asset is the distribution channel; do not add an `npm publish` step here.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag (and release) to attach the tarball to
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  tarball:
+    name: build and attach the npm tarball
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The package itself has zero runtime dependencies. The compiler is
+      # installed for the build rather than declared as a runtime dependency,
+      # matching the CI `checks` job.
+      - name: Install the TypeScript compiler
+        run: npm install --global typescript
+
+      - name: Build the generated sources
+        working-directory: plugin
+        run: npm run build
+
+      # `prepack` asserts the required artifacts are present, so a broken or
+      # unbuilt tree fails here rather than shipping a tarball that cannot mount.
+      - name: Pack the npm tarball
+        id: pack
+        working-directory: plugin
+        run: |
+          npm pack
+          TARBALL="$(ls -1 dsh-agent-behavioral-governance-*.tgz | head -1)"
+          test -n "$TARBALL" || { echo "npm pack produced no tarball"; exit 1; }
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          sha256sum "$TARBALL" > "$TARBALL.sha256"
+          echo "sha256: $(cat "$TARBALL.sha256")"
+
+      - name: Assert the tarball carries the mountable plugin
+        working-directory: plugin
+        run: |
+          TARBALL="${{ steps.pack.outputs.tarball }}"
+          for f in package/lib/index.js package/lib/generated/kernel/prompt-compiler.js package/cordis.patch.yml package/package.json; do
+            tar tzf "$TARBALL" | grep -qx "$f" || { echo "missing from tarball: $f"; exit 1; }
+          done
+          echo "tarball contents verified"
+
+      - name: Attach the tarball and its checksum to the release
+        working-directory: plugin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TARBALL="${{ steps.pack.outputs.tarball }}"
+          test -n "$TAG" || { echo "no tag to attach to"; exit 1; }
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" --clobber
+          else
+            gh release create "$TAG" "$TARBALL" "$TARBALL.sha256" \
+              --title "agent-behavioral-governance $TAG" --generate-notes
+          fi
+          echo "attached $TARBALL to release $TAG"
