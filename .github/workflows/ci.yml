@@ -85,3 +85,8 @@ jobs:
       - name: Full verification chain
         working-directory: plugin
         run: ./scripts/verify.sh
+
+      - name: npm-native lifecycle (pack -> install -> compose -> uninstall)
+        run: |
+          chmod +x scripts/abg-npm.sh scripts/abg-npm-lifecycle-check.sh
+          ./scripts/abg-npm-lifecycle-check.sh
