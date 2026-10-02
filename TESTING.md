@@ -163,6 +163,20 @@ Metrics the project is trying to establish are listed in
 [`eval/README.md`](eval/README.md): questions per batch, user interruptions,
 false blocks, and whether known-invalid information stops being reused.
 
+#### Method C — npm only (no pnpm required)
+
+If pnpm is unavailable, the same lifecycle runs through npm:
+
+```bash
+./scripts/abg-npm.sh install   --profile abg-test
+./scripts/abg-npm.sh status    --profile abg-test
+./scripts/abg-npm.sh uninstall --profile abg-test
+```
+
+`dsh plugin` forwards to pnpm and additionally registers the profile bundle; plain
+`npm install` does not, which is why the helper exists. It never touches `~/.dsh`
+without `--allow-live`. These scripts need a clone (they are not in the tarball).
+
 ## 5. Uninstall
 
 Use the uninstall command in [`README.md`](README.md) §Install. Nothing else is

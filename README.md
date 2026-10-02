@@ -126,6 +126,25 @@ dropped). Nothing is submitted without a human opening the link, and the optiona
 `api` mode that files issues directly is strictly opt-in and reads its token from
 the environment.
 
+#### Without pnpm — npm only
+
+`dsh plugin … add|remove` forwards its arguments to **pnpm** (a real install prints
+`Done in 25ms using pnpm v12.8.1`), and it also registers the profile bundle. Plain
+`npm install` does **not**, so a package installed that way sits on disk without
+ever mounting. To run the whole lifecycle through npm instead:
+
+```bash
+./scripts/abg-npm.sh install   --profile abg-test [--from <tarball-or-dir>]
+./scripts/abg-npm.sh status    --profile abg-test
+./scripts/abg-npm.sh update    --profile abg-test
+./scripts/abg-npm.sh uninstall --profile abg-test
+```
+
+The helper maintains `dsh.profile.bundles` (which is what mounts the plugin) and
+refuses to touch `~/.dsh` without `--allow-live`. The package is `"private": true`,
+so there is no registry install; every artifact comes from `npm pack` or a release
+tarball.
+
 ## Repository layout
 
 ```text
