@@ -21,12 +21,18 @@ is a governance layer, not a sandbox, and it is not a security control.
 
 ABG is installed into a profile, not globally. Pick one of the two methods.
 
+> **Command syntax gotcha.** Everything after `dsh plugin --profile <name>` is
+> forwarded **verbatim to pnpm**, so launcher flags such as
+> `--from-default-profile`, `--dump-config`, or `--patch` must never appear there
+> — you will get `Usage: pnpm [OPTIONS] <COMMAND>`. Launcher flags go with the
+> launcher: `dsh --profile <name> --from-default-profile headless --dump-config`.
+
 ### Method A — from a release tarball (no git needed)
 
-Download the package for the release you want and install it by URL:
-
 ```bash
-dsh plugin --profile abg-test --from-default-profile headless --dump-config
+# optional: create a throwaway profile first (note: no `plugin` subcommand here)
+dsh --profile abg-test --from-default-profile headless --dump-config
+
 dsh plugin --profile abg-test add \
   "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.3.0/dsh-agent-behavioral-governance-0.3.0.tgz"
 ```
@@ -35,18 +41,49 @@ dsh plugin --profile abg-test add \
 
 ```bash
 git clone --depth 1 https://github.com/ccneedb/agent-behavioral-governance.git abg
-dsh plugin --profile abg-test --from-default-profile headless --dump-config
 dsh plugin --profile abg-test add "file:$PWD/abg/plugin"
 ```
 
-### Confirm it mounted
+`dsh plugin --profile <name> add` initializes the profile if it does not exist
+yet, so the explicit creation step is optional — it only lets you choose the
+template. `dsh plugin add` links the plugin **at install time**, so **re-install
+after any source change** or you will keep exercising the old code.
+
+### Did it actually load?
+
+Installing is not the same as running. Three checks, cheapest first:
 
 ```bash
-dsh --profile abg-test --dump-config | grep -A3 'id: abg'
+# 1. Is the row in THIS profile's composed tree? (the decisive check)
+dsh --profile abg-test --dump-config | grep -A4 'id: abg'
+
+# 2. Is the package on disk, and which version?
+cat "$DSH_HOME/profiles/abg-test/node_modules/dsh-agent-behavioral-governance/package.json" 2>/dev/null | grep '"version"'
+
+# 3. Boot that profile and ask ABG about itself (in-session)
+dsh --profile abg-test --dump-config >/dev/null && dsh --profile abg-test "<any task>"
+#   then call the read-only `abg_status` tool, or read the `abg:status` line
 ```
 
-`dsh plugin add` links the plugin at install time, so **re-install after any source
-change** or you will keep exercising the old code.
+Or let the checker do all of it:
+
+```bash
+./scripts/check-install.sh abg-test
+```
+
+**Why the plugin list can still look empty.** DSH shows the bundles of the
+profile you are **running**, not the ones you installed elsewhere. If you
+installed into `abg-test` while your GUI/app runs the `web` profile, ABG will
+never appear in that list — correctly. Either run the profile you installed into
+(`dsh --profile abg-test …`), or install into the profile you actually run:
+
+```bash
+dsh plugin --profile web add "<same package reference>"
+```
+
+That last command modifies your live profile. The project does not recommend it
+while the behavioural gates (C, D, E) are unmeasured — see
+[`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §10.
 
 ## 3. Configure it for a first trial
 

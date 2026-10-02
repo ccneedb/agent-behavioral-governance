@@ -180,6 +180,22 @@ durability         ctx.storageDomain                 per-session orientation
 
 These each cost real time. Do not rediscover them.
 
+- **`dsh plugin --profile <name> <args…>` forwards every argument to pnpm.** Any
+  launcher flag placed after `plugin` reaches pnpm and fails with
+  `error: unexpected argument '--from-default-profile'` followed by
+  `Usage: pnpm [OPTIONS] <COMMAND>`. Profile creation therefore reads
+  `dsh --profile abg-test --from-default-profile headless --dump-config` — with
+  no `plugin` subcommand. This error was reported by the first volunteer because
+  `TESTING.md` documented the wrong form; §28.6-era docs were corrected, and
+  `scripts/check-install.sh` now checks the install end to end.
+- **The plugin list shows the profile you are *running*, not the one you installed
+  into.** Installing into `abg-test` while the GUI runs `web` looks exactly like a
+  failed install and is the second defect the first volunteer reported. The
+  package, the manifest reference, and the composed `abg` row are all per profile;
+  `scripts/check-install.sh <profile>` reports which of the three states you are
+  in, and `dsh --profile <name> --dump-config` needs **write** access to that
+  profile directory (it materialises a temporary `cordis.yml`), so a sandboxed or
+  read-only `DSH_HOME` yields "unverified" rather than a false negative.
 - **An installed profile links the plugin at install time.** Re-running validation
   after a source change silently exercises the *old* code. This produced a
   misleading result once. `eval/e2e.mjs` now re-installs before running; do the

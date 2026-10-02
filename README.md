@@ -79,15 +79,24 @@ A/B procedure, and a redacted one-step reporting tool:
 > **[`TESTING.md`](TESTING.md) — volunteer testing guide**
 
 ```bash
-# release tarball
-dsh plugin --profile abg-test --from-default-profile headless --dump-config
+# release tarball — flags such as --from-default-profile belong to the launcher,
+# not to `dsh plugin` (everything after `plugin` is forwarded to pnpm)
+dsh --profile abg-test --from-default-profile headless --dump-config
 dsh plugin --profile abg-test add \
   "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.3.0/dsh-agent-behavioral-governance-0.3.0.tgz"
 
 # or from a clone
 git clone --depth 1 https://github.com/ccneedb/agent-behavioral-governance.git abg
 dsh plugin --profile abg-test add "file:$PWD/abg/plugin"
+
+# then confirm the row composes into THAT profile
+./scripts/check-install.sh abg-test
 ```
+
+The plugin list in a running app shows the bundles of the profile that app
+**runs** — installing into `abg-test` while your GUI runs `web` looks exactly
+like a failed install. [`scripts/check-install.sh`](scripts/check-install.sh)
+checks the profile end to end and prints which situation you are in.
 
 ### Feedback from inside the session
 
