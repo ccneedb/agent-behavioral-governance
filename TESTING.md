@@ -120,7 +120,21 @@ unavailable, the plugin's host half is not mounted in this profile — check wit
 `./scripts/check-install.sh <profile>`.
 
 The panel is the fastest way to answer "is ABG even doing anything?", which is
-otherwise indistinguishable from silence.
+otherwise indistinguishable from silence. It also gives you the two controls:
+
+- **Prompt** — edit the section text and press **Apply**; it takes effect on the
+  next step. This is only enabled when the profile sets `prompt.mode: replace`
+  and `prompt.file: <path>`; otherwise the textarea is read-only and the panel
+  says why. Refused edits (an `{{ }}` in the text, or over the byte budget) are
+  shown inline, and the panel lists which conformance invariants no longer apply
+  to user-written text.
+- **Report a deviation** — fill the three fields and press **Preview** to compose
+  the redacted report, then **Copy report** or **Open prefilled issue**. In
+  opt-in `api` mode a **File issue** button submits it directly.
+
+Use **Revert** to restore the last applied text before re-applying, and prefer
+editing the settings overlay when you want a change to be reproducible for the
+next person — the editor writes exactly the file named by `prompt.file`.
 
 ## 4. What a useful trial looks like
 

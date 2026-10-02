@@ -22,6 +22,36 @@ the governance state `DOMAIN_VERSION` (§22.3).
 > for volunteer testing** (a tag plus a packed tarball), not as an npm package:
 > the `0.1.0`/`0.2.0` entries below stay staged under **Unreleased**.
 
+## [0.5.0] — 2026-10-02
+
+The Web GUI panel becomes editable: it can now change the prompt and file
+feedback, not just show status.
+
+### Added
+
+- **Prompt editor in the panel.** `POST /api/abg/prompt` persists an edited
+  section text, and the change applies to the next assembly without a restart
+  (the section provider is function-valued). The editor is **disabled unless
+  `prompt.mode` is `replace` and `prompt.file` names a path** — there is
+  deliberately no default write target, so an unconfigured deployment gets a
+  read-only editor (409) rather than a surprise file. Validation runs through the
+  same `composePromptOverride` as the file and the config, so an interpolation or
+  over-budget edit is refused with the same wording (422 + issues), and an applied
+  edit is attributed `PROMPT_VERSION+user:<hash>` and reports `promptUnchecked`.
+- **Feedback form in the panel.** `POST /api/abg/feedback` composes through
+  `composeFeedback`, so the browser path shares the kernel's redaction rather than
+  reimplementing it. The form previews the exact markdown, copies it, opens the
+  prefilled issue link, and files directly only in opt-in `api` mode.
+- `lib/kernel/gui-actions.js`: the two write actions as pure functions with
+  injected I/O, plus `MAX_REQUEST_BYTES` bounding the accepted body.
+
+### Changed
+
+- `GET /api/abg/status` also reports the editor's view and the feedback mode.
+- Package version `0.5.0`. For a default configuration (`prompt.mode: compiled`)
+  the compiled section is byte-identical to `0.4.0`, so `PROMPT_VERSION` stays
+  `0.2.0` unless an override applies.
+
 ## [0.4.0] — 2026-10-02
 
 Adds the two capabilities a front end needs: a user-editable prompt and a

@@ -21,9 +21,10 @@ import { dirname } from 'node:path'
 
 import { resolveConfig, DEFAULT_SECTION_ORDER } from './kernel/config.js'
 import { createRegistry } from './kernel/registry.js'
-import { compilePrompt, promptStats } from './kernel/prompt-compiler.js'
+import { compilePrompt, promptStats, utf8Bytes } from './kernel/prompt-compiler.js'
 import { composePromptOverride } from './kernel/prompt-override.js'
 import { createDiagnosticsExporter } from './kernel/export.js'
+import { MAX_REQUEST_BYTES, planPromptEdit, promptEditorState, submitFeedback } from './kernel/gui-actions.js'
 import { projectGovernanceModule, createProjectState, evaluateOrientationGate } from './modules/project-governance.js'
 import { informationIntegrityModule } from './modules/information-integrity.js'
 import { userAttentionModule, createQuestionCollector } from './modules/user-attention.js'
@@ -77,6 +78,12 @@ export const STATUS_TOOL_NAME = 'abg_status'
  */
 export const STATUS_ROUTE_PATH = '/api/abg/status'
 
+/** The prompt-editor write route (POST `{ text }`). Enabled only for `prompt.mode: replace`. */
+export const PROMPT_ROUTE_PATH = '/api/abg/prompt'
+
+/** The feedback-form write route (POST `{ summary, expected, actual, file? }`). */
+export const FEEDBACK_ROUTE_PATH = '/api/abg/feedback'
+
 /**
  * Version of the compiled governance prompt. It changes whenever the injected
  * model-facing text changes, so a behavioural regression is attributable to one
@@ -89,7 +96,7 @@ export const PROMPT_VERSION = '0.2.0'
  * Declared here so a feedback report can name the build it came from without the
  * plugin reading the filesystem at runtime.
  */
-export const PLUGIN_VERSION = '0.4.0'
+export const PLUGIN_VERSION = '0.5.0'
 
 /**
  * Stable kernel invariants: the statements that hold regardless of which modules
@@ -146,6 +153,7 @@ export const MODULES = Object.freeze([
  *   promptUnchecked: string[],
  *   promptVersion: string,
  *   compiledBytes: number,
+ *   compiledPrompt: string,
  * }}
  */
 export function buildGovernance(raw, options = {}) {
@@ -181,6 +189,8 @@ export function buildGovernance(raw, options = {}) {
     promptVersion: `${PROMPT_VERSION}${composed.versionSuffix}`,
     /** Bytes of the audited compiled default, for a diff in any front end. */
     compiledBytes: promptStats(basePrompt).bytes,
+    /** The audited compiled text, which every override is validated against. */
+    compiledPrompt: basePrompt,
   }
 }
 
@@ -290,6 +300,23 @@ function readPromptOverride(rawConfig) {
 }
 
 /**
+ * Persist a prompt override so the panel's "applied" means durable.
+ *
+ * Written to a temporary sibling and renamed, so a reader (the next process
+ * start, or an editor) never observes a half-written prompt.
+ *
+ * @param {string} path
+ * @param {string} text
+ * @returns {void}
+ */
+function writeTextFile(path, text) {
+  const temporary = `${path}.tmp`
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(temporary, text)
+  renameSync(temporary, path)
+}
+
+/**
  * Mount ABG.
  *
  * Contract (`ARCHITECTURE-SPEC` §26.2): **this function does not throw.**
@@ -375,6 +402,20 @@ export function apply(ctx, rawConfig) {
     /** Replaced by the compatibility adapter's snapshot once it observes one. */
     compatibility: { verdict: 'PENDING', reasons: [] },
   })
+
+  /**
+   * The live prompt facts. The GUI editor mutates these, and the section text
+   * provider, the status route and the feedback report all read them, so an edit
+   * applies to the next assembly without a restart.
+   */
+  const promptState = {
+    text: prompt,
+    bytes: stats.bytes,
+    overridden: kernel.promptOverridden,
+    version: kernel.promptVersion,
+    issues: [...kernel.promptIssues],
+    unchecked: [...kernel.promptUnchecked],
+  }
 
   /** Set once the exporter exists; `note()` calls it so every record can mirror. */
   let flushExport = () => {}
@@ -608,7 +649,9 @@ export function apply(ctx, rawConfig) {
         name: SECTION_NAME,
         order: config.sectionOrder,
         interpolate: false,
-        text: () => prompt,
+        // A function-valued provider is re-evaluated per assembly, which is what
+        // lets a GUI edit take effect on the next step.
+        text: () => promptState.text,
       })
     })
 
@@ -883,54 +926,194 @@ export function apply(ctx, rawConfig) {
     // to record, not a quiet no-op.
     noteMissing('tools')
   } else {
-    /* ── Web GUI data route (§28.8) ───────────────────────────────────────── */
+    /* ── Web GUI routes (§28.8) ───────────────────────────────────────────── */
 
-  // Same shape as `abg_status` and the on-disk mirror, so all three front ends
-  // read one contract. Optional seam: a headless composition simply has no
-  // webserver, and its absence is not a degradation.
+  // One read route (the same JSON shape as `abg_status` and the on-disk mirror)
+  // and two write routes: the prompt editor and the feedback form. All three sit
+  // under `/api`, behind the deployment's browser-trust fence, and are registered
+  // in one guarded step. A headless composition has no such seam, which is an
+  // optional capability and not a degradation — but the reason is recorded
+  // in-band, because an `inject` that never fires leaves no trace at all.
   if (config.gui.enabled) {
     ctx.inject?.(['webServer'], (webCtx) => {
-      // In-band evidence either way: an `inject` that never fires leaves no
-      // trace at all, which is exactly the ambiguity this branch removes.
       const webServer = webCtx.webServer
       if (webServer === undefined) {
         noteMissing('webServer')
         return
       }
-      guarded('webserver.route', () => {
-        const dispose = webServer.register({
-          kind: 'exact',
-          path: STATUS_ROUTE_PATH,
-          handler: (_req, res) => {
-            try {
-              const payload = {
-                schema: 1,
-                generatedAt: new Date().toISOString(),
-                mount,
-                status_line: diagnostics.formatLine(),
-                counts: diagnostics.counts(),
-                diagnostics: diagnostics.recent(50),
-              }
-              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
-              res.end(`${JSON.stringify(payload)}\n`)
-            } catch (error) {
-              // The handler owns the response lifecycle; never leave it open.
-              try {
-                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
-                res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
-              } catch {
-                /* the response is already gone */
-              }
+
+      /** The live mount view: prompt facts change when the editor writes. */
+      const mountView = () => ({
+        ...mount,
+        promptBytes: promptState.bytes,
+        promptVersion: promptState.version,
+        promptOverridden: promptState.overridden,
+        promptIssues: promptState.issues,
+        compiledPromptBytes: kernel.compiledBytes,
+      })
+
+      /**
+       * @param {AbgWebResponse} res
+       * @param {number} status
+       * @param {unknown} body
+       */
+      const sendJson = (res, status, body) => {
+        // The route handler owns the response lifecycle: a client that already
+        // went away must not turn into an unhandled exception in the host.
+        try {
+          res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
+          res.end(`${JSON.stringify(body)}\n`)
+        } catch {
+          /* the response is already gone */
+        }
+      }
+
+      /** Collect a bounded request body. Never leaves the request unread. */
+      /**
+       * @param {AbgWebRequest} req
+       * @returns {Promise<string>}
+       */
+      const readBody = async (req) => {
+        /** @type {{ length: number }[]} */
+        const chunks = []
+        let size = 0
+        await new Promise((resolve, reject) => {
+          req.on('data', (chunk) => {
+            size += chunk.length
+            if (size > MAX_REQUEST_BYTES) {
+              reject(new Error(`request body exceeds ${MAX_REQUEST_BYTES} bytes`))
+              req.destroy?.()
+              return
             }
-          },
+            chunks.push(chunk)
+          })
+          req.on('end', () => resolve(undefined))
+          req.on('error', reject)
         })
-        note(
-          'abg.gui_route_registered',
-          { path: STATUS_ROUTE_PATH, kind: 'exact' },
-          `abg: gui_route_registered path=${STATUS_ROUTE_PATH}`,
-        )
-        if (typeof dispose === 'function') {
-          ctx.effect?.(() => dispose, 'abg: remove the GUI status route')
+        return Buffer.concat(chunks).toString('utf8')
+      }
+
+      /**
+       * @param {AbgWebRequest} req
+       * @returns {Promise<Record<string, unknown>>}
+       */
+      const jsonRequest = async (req) => {
+        const raw = await readBody(req)
+        if (raw.trim() === '') return {}
+        return JSON.parse(raw)
+      }
+
+      guarded('webserver.routes', () => {
+        /** @type {Array<() => void>} */
+        const disposers = []
+        /**
+         * @param {string} path
+         * @param {(req: AbgWebRequest, res: AbgWebResponse) => void} handler
+         */
+        const route = (path, handler) => {
+          const dispose = webServer.register({ kind: 'exact', path, handler })
+          if (typeof dispose === 'function') disposers.push(dispose)
+          note('abg.gui_route_registered', { path, kind: 'exact' }, `abg: gui_route_registered path=${path}`)
+        }
+
+        // 1. Read: governance state, the prompt editor's view, and feedback mode.
+        route(STATUS_ROUTE_PATH, (_req, res) => {
+          sendJson(res, 200, {
+            schema: 1,
+            generatedAt: new Date().toISOString(),
+            mount: mountView(),
+            status_line: diagnostics.formatLine(),
+            counts: diagnostics.counts(),
+            diagnostics: diagnostics.recent(50),
+            prompt: promptEditorState({ config, state: promptState }),
+            feedback: {
+              mode: config.feedback.mode,
+              enabled: config.feedback.enabled,
+              repository: config.feedback.repository,
+              token_env_var: config.feedback.tokenEnvVar,
+              can_file: config.feedback.mode === 'api',
+            },
+          })
+        })
+
+        // 2. Write: the prompt editor. Refusals are the same rules the file and
+        //    the config obey, because they are the same kernel.
+        route(PROMPT_ROUTE_PATH, (req, res) => {
+          void (async () => {
+            try {
+              if (req.method !== 'POST') {
+                sendJson(res, 405, { error: 'use POST' })
+                return
+              }
+              const payload = await jsonRequest(req)
+              const plan = planPromptEdit({ config, basePrompt: kernel.compiledPrompt, text: payload.text })
+              if (plan.status !== 200 || plan.composed === undefined) {
+                sendJson(res, plan.status, plan.body)
+                note(
+                  'abg.prompt_override_rejected',
+                  { source: 'gui', status: plan.status, issues: plan.body.issues ?? plan.body.error },
+                  `abg: prompt_override_rejected source=gui status=${plan.status}`,
+                  'warn',
+                )
+                return
+              }
+
+              // Persist first, then adopt: a panel that reports success must be
+              // reporting a durable fact, not an in-memory one.
+              writeTextFile(config.prompt.file, plan.composed.text)
+              promptState.text = plan.composed.text
+              promptState.bytes = utf8Bytes(plan.composed.text)
+              promptState.overridden = true
+              promptState.version = `${PROMPT_VERSION}${plan.composed.versionSuffix}`
+              promptState.issues = plan.composed.issues
+              promptState.unchecked = plan.composed.unchecked
+              note(
+                'abg.prompt_override_applied',
+                {
+                  source: 'gui',
+                  promptVersion: promptState.version,
+                  bytes: promptState.bytes,
+                  unchecked: promptState.unchecked,
+                },
+                `abg: prompt_override_applied source=gui version=${promptState.version} bytes=${promptState.bytes}`,
+                'warn',
+              )
+              sendJson(res, 200, { applied: true, ...promptEditorState({ config, state: promptState }) })
+            } catch (error) {
+              sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
+            }
+          })()
+        })
+
+        // 3. Write: the feedback form. Composition stays in the kernel, so the
+        //    redaction tests cover the browser path too.
+        route(FEEDBACK_ROUTE_PATH, (req, res) => {
+          void (async () => {
+            try {
+              if (req.method !== 'POST') {
+                sendJson(res, 405, { error: 'use POST' })
+                return
+              }
+              const payload = await jsonRequest(req)
+              const result = await submitFeedback({
+                config: config.feedback,
+                mount: mountView(),
+                diagnostics,
+                pluginVersion: PLUGIN_VERSION,
+                promptVersion: promptState.version,
+                payload,
+              })
+              sendJson(res, result.status, result.body)
+            } catch (error) {
+              sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
+            }
+          })()
+        })
+
+        if (disposers.length > 0) {
+          ctx.effect?.(() => () => {
+            for (const dispose of disposers) dispose()
+          }, 'abg: remove the GUI routes')
         }
       })
     })
