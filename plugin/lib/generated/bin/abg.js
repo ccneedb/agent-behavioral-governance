@@ -25,6 +25,12 @@ import { fileURLToPath } from 'node:url';
 import { readControlStateFile, resolveControlPaths, transitionDiagnostic, writeControlStateFile, } from '../kernel/control.js';
 import { PROMPT_FILE_NAME, deletePromptFile, readPromptFile, resolveEffectivePrompt, validatePromptText, writePromptFile, } from '../kernel/prompt-store.js';
 import { runLifecycle, validateProfileName } from '../kernel/lifecycle.js';
+/** EPIPE guard: a shell user pipes this (`abg status | head`, `| less` then quit). */
+const stdoutStream = process.stdout;
+stdoutStream.on?.('error', (error) => {
+    if (error && error.code === 'EPIPE')
+        process.exit(0);
+});
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The package root: `lib/generated/bin` -> `plugin/`. */
 const PLUGIN_DIR = join(HERE, '..', '..', '..');

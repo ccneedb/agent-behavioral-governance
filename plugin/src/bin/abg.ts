@@ -44,6 +44,14 @@ import {
 } from '../kernel/prompt-store.js'
 import { runLifecycle, validateProfileName, type LifecycleResult } from '../kernel/lifecycle.js'
 
+/** EPIPE guard: a shell user pipes this (`abg status | head`, `| less` then quit). */
+const stdoutStream = process.stdout as unknown as {
+  on?: (event: string, listener: (error: { code?: string }) => void) => void
+}
+stdoutStream.on?.('error', (error) => {
+  if (error && error.code === 'EPIPE') process.exit(0)
+})
+
 
 /** The slice of `lib/index.js` the CLI uses. Loaded lazily to keep `--version` cheap. */
 interface AbgKernel {
