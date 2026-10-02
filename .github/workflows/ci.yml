@@ -31,6 +31,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      # The package itself has zero dependencies — that is a design property, not
+      # an oversight — so the compiler is installed for the check rather than
+      # declared as a runtime dependency.
+      - name: Install TypeScript
+        run: npm install --global typescript
       - name: Typecheck (strict checkJs)
         working-directory: plugin
         run: npm run typecheck
@@ -53,6 +58,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install TypeScript
+        run: npm install --global typescript
       - name: Install the verified host release
         run: npm install --global @deepseek-ai/dsh@0.2.0-rc.2
       - name: Point the test loader at the installed host
