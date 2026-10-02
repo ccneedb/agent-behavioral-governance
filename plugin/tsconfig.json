@@ -13,5 +13,8 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["lib"]
+  "include": ["lib"],
+  // The Web GUI bundle is a hand-authored browser artifact (lazy-CJS envelope,
+  // baseline `require`, browser globals), not Node source; it is not typechecked.
+  "exclude": ["lib/client.js"]
 }

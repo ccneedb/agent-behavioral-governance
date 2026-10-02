@@ -42,6 +42,8 @@ function stubContext() {
   const logs = []
   /** @type {Array<{ action: () => (() => void) | void, label?: string }>} */
   const effects = []
+  /** @type {Array<{ kind: string, path: string, handler: (req: unknown, res: any) => unknown }>} */
+  const routes = []
 
   /** @param {string} level */
   const record = (level) => (/** @type {string} */ message) => {
@@ -81,6 +83,7 @@ function stubContext() {
     tools,
     logs,
     effects,
+    routes,
     /** Simulate the tool registry becoming available. */
     mountTools: () => {
       for (const injection of injections) {
@@ -90,6 +93,21 @@ function stubContext() {
               guard: (/** @type {any} */ guard) => guards.push(guard),
               register: (/** @type {any} */ definition) => {
                 tools.push(definition)
+                return () => {}
+              },
+            },
+          })
+        }
+      }
+    },
+    /** Simulate the web server becoming available (the Web GUI composition). */
+    mountWebserver: () => {
+      for (const injection of injections) {
+        if (injection.services.includes('webServer')) {
+          injection.callback({
+            webServer: {
+              register: (/** @type {any} */ route) => {
+                routes.push(route)
                 return () => {}
               },
             },
@@ -134,8 +152,11 @@ test('ABG requests the tool registry through ctx.inject, not eagerly', () => {
   const stub = stubContext()
   abg.apply(stub.ctx, { workspace: { protectedPaths: ['/repo/secrets'] } })
 
-  assert.equal(stub.injections.length, 1)
-  assert.deepEqual(stub.injections[0].services, ['tools'])
+  assert.deepEqual(
+    stub.injections.map((injection) => injection.services.join(',')).sort(),
+    ['tools', 'webServer'],
+    'every optional service is requested through ctx.inject, never read eagerly',
+  )
   assert.equal(stub.guards.length, 0, 'no guard before the registry exists')
   assert.equal(stub.tools.length, 0, 'no tool before the registry exists')
 
@@ -528,4 +549,49 @@ test('a full mount degrades nothing and collects its disposer', () => {
   const disposer = stub.effects[0].action()
   assert.equal(typeof disposer, 'function')
   assert.doesNotThrow(() => /** @type {() => void} */ (disposer)())
+})
+
+/* ── Web GUI data route (§28.8) ──────────────────────────────────────────── */
+
+test('the GUI status route serves one JSON contract and never leaves a response open', async () => {
+  const stub = stubContext()
+  abg.apply(stub.ctx, {})
+  assert.equal(stub.routes.length, 0, 'no route before the web server exists')
+  stub.mountWebserver()
+
+  assert.equal(stub.routes.length, 1)
+  const route = stub.routes[0]
+  assert.equal(route.kind, 'exact')
+  assert.equal(route.path, abg.STATUS_ROUTE_PATH)
+
+  const headers = {}
+  let body = ''
+  const okRes = {
+    writeHead: (status, extra) => Object.assign(headers, { status }, extra ?? {}),
+    end: (text) => { body = String(text ?? '') },
+  }
+  await route.handler({}, okRes)
+  assert.equal(headers.status, 200)
+  assert.match(String(headers['Content-Type']), /application\/json/)
+  assert.equal(headers['Cache-Control'], 'no-store')
+  const payload = JSON.parse(body)
+  assert.equal(payload.schema, 1)
+  assert.equal(payload.mount.mounted, true)
+  assert.equal(payload.mount.promptOverridden, false)
+  assert.match(payload.status_line, /^abg:/)
+  assert.ok(Array.isArray(payload.diagnostics))
+
+  // A handler that owns the response lifecycle must still answer on failure.
+  const failing = {
+    writeHead: () => { throw new Error('socket closed') },
+    end: () => { throw new Error('socket closed') },
+  }
+  await assert.doesNotReject(() => Promise.resolve(route.handler({}, failing)))
+})
+
+test('the GUI route can be switched off', () => {
+  const stub = stubContext()
+  abg.apply(stub.ctx, { gui: { enabled: false } })
+  stub.mountWebserver()
+  assert.equal(stub.routes.length, 0)
 })

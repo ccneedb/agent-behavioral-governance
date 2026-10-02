@@ -28,6 +28,7 @@ const EXPECTED_CODES = [
   'abg.module_conflict',
   'abg.host_compatibility',
   'abg.prompt_assembly',
+  'abg.gui_route_registered',
   'abg.prompt_override_applied',
   'abg.prompt_override_rejected',
   'abg.prompt_override_missing',

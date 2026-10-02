@@ -71,6 +71,13 @@ export const STATUS_CONTEXT_NAME = 'abg:status'
 export const STATUS_TOOL_NAME = 'abg_status'
 
 /**
+ * The read-only JSON route the Web GUI panel reads (the same payload as
+ * `abg_status` and the diagnostics mirror). Registered on the deployment's own
+ * web server under the browser-trust fence, and only when one is mounted.
+ */
+export const STATUS_ROUTE_PATH = '/api/abg/status'
+
+/**
  * Version of the compiled governance prompt. It changes whenever the injected
  * model-facing text changes, so a behavioural regression is attributable to one
  * prompt revision (ARCHITECTURE-SPEC Part B §22.3, PRODUCT-SPEC PR-07).
@@ -483,7 +490,12 @@ export function apply(ctx, rawConfig) {
     guarded('diagnosticsExport', () => {
       exporter.flush(true)
     })
-    guarded('dispose.diagnosticsExport', () => {
+    guarded('diagnosticsExport.mount', () => {
+    // The setup flush happens before the mount records exist, and the throttle
+    // then suppresses them, so the mirror would otherwise show an empty ring.
+    exporter.flush(true)
+  })
+  guarded('dispose.diagnosticsExport', () => {
       ctx.effect?.(() => () => {
         exporter.close()
       }, 'abg: stop mirroring diagnostics')
@@ -871,7 +883,60 @@ export function apply(ctx, rawConfig) {
     // to record, not a quiet no-op.
     noteMissing('tools')
   } else {
-    guarded('tools', () => {
+    /* ── Web GUI data route (§28.8) ───────────────────────────────────────── */
+
+  // Same shape as `abg_status` and the on-disk mirror, so all three front ends
+  // read one contract. Optional seam: a headless composition simply has no
+  // webserver, and its absence is not a degradation.
+  if (config.gui.enabled) {
+    ctx.inject?.(['webServer'], (webCtx) => {
+      // In-band evidence either way: an `inject` that never fires leaves no
+      // trace at all, which is exactly the ambiguity this branch removes.
+      const webServer = webCtx.webServer
+      if (webServer === undefined) {
+        noteMissing('webServer')
+        return
+      }
+      guarded('webserver.route', () => {
+        const dispose = webServer.register({
+          kind: 'exact',
+          path: STATUS_ROUTE_PATH,
+          handler: (_req, res) => {
+            try {
+              const payload = {
+                schema: 1,
+                generatedAt: new Date().toISOString(),
+                mount,
+                status_line: diagnostics.formatLine(),
+                counts: diagnostics.counts(),
+                diagnostics: diagnostics.recent(50),
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
+              res.end(`${JSON.stringify(payload)}\n`)
+            } catch (error) {
+              // The handler owns the response lifecycle; never leave it open.
+              try {
+                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
+              } catch {
+                /* the response is already gone */
+              }
+            }
+          },
+        })
+        note(
+          'abg.gui_route_registered',
+          { path: STATUS_ROUTE_PATH, kind: 'exact' },
+          `abg: gui_route_registered path=${STATUS_ROUTE_PATH}`,
+        )
+        if (typeof dispose === 'function') {
+          ctx.effect?.(() => dispose, 'abg: remove the GUI status route')
+        }
+      })
+    })
+  }
+
+  guarded('tools', () => {
       ctx.inject?.(['tools'], attachTools)
     })
   }

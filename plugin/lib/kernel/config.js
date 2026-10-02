@@ -56,6 +56,7 @@ const TOP_LEVEL_KEYS = [
   'userAttention',
   'feedback',
   'prompt',
+  'gui',
   'diagnostics',
   'diagnosticsExport',
 ]
@@ -64,6 +65,7 @@ const PRESTEP_KEYS = ['orientationGate', 'requireBeforeMutation']
 const USER_ATTENTION_KEYS = ['enforceBatchCompleteness']
 const FEEDBACK_KEYS = ['enabled', 'mode', 'repository', 'tokenEnvVar', 'labels', 'includeDiagnostics']
 const PROMPT_KEYS = ['mode', 'append', 'file', 'allowOverBudget']
+const GUI_KEYS = ['enabled']
 const DIAGNOSTICS_EXPORT_KEYS = ['file', 'limit']
 const MODULE_TOGGLE_KEYS = ['enabled']
 
@@ -293,6 +295,12 @@ export function resolveConfig(raw) {
         : requireBoolean(rawPrompt.allowOverBudget, 'prompt.allowOverBudget'),
   })
 
+  const rawGui = input.gui === undefined ? {} : requireObject(input.gui, 'gui.')
+  rejectUnknownKeys(rawGui, GUI_KEYS, 'gui.')
+  const gui = Object.freeze({
+    enabled: rawGui.enabled === undefined ? true : requireBoolean(rawGui.enabled, 'gui.enabled'),
+  })
+
   const rawExport = input.diagnosticsExport === undefined ? {} : requireObject(input.diagnosticsExport, 'diagnosticsExport.')
   rejectUnknownKeys(rawExport, DIAGNOSTICS_EXPORT_KEYS, 'diagnosticsExport.')
   const diagnosticsExport = Object.freeze({
@@ -319,6 +327,7 @@ export function resolveConfig(raw) {
     userAttention: Object.freeze({ enforceBatchCompleteness }),
     feedback,
     prompt,
+    gui,
     diagnostics,
     diagnosticsExport,
   })
