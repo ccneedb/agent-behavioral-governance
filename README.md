@@ -1,11 +1,11 @@
 ---
 doc_type: readme
 project: agent-behavioral-governance
-version: 0.5.0
-plugin_version: 0.5.0
+version: 0.2.0
+plugin_version: 0.6.0
 status: active
 owner: maintainers
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 revision: docs-health-consolidation
 verified_against: dsh-v0.2.0-rc.2
 language: en
@@ -40,34 +40,55 @@ plugin.
 | Document | Audience | Purpose |
 |---|---|---|
 | `PRODUCT-SPEC.md` | humans + agents | positioning, scope, functionality, goals, constraints, success criteria — the single source of truth for what ABG is |
-| `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` | implementation agents | architecture, module contracts, diagrams, runtime integration, compatibility model. **Part A (§§1–21)** is the source-verified host integration, its deltas, residual assumptions, and the `0.1.0` prototype realization. **Part B (§§22–34)** is the target design (baseline v0.2.0, extended through the v0.5.0 GUI round): per-agent state, diagnosability, the compatibility adapter, runtime question consolidation, packaging, the acceptance matrix (**§32**), and the phase plan (**§33**) |
+| `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` | implementation agents | architecture, module contracts, diagrams, runtime integration, compatibility model. **Part A (§§1–21)** is the source-verified host integration, its deltas, residual assumptions, and the `0.1.0` prototype realization. **Part B (§§22–34)** is the target design (baseline v0.2.0, extended through the v0.6.0 control-plane round): per-agent state, diagnosability, the compatibility adapter, runtime question consolidation, packaging, the acceptance matrix (**§32**), and the phase plan (**§33**) |
 | `MAINTENANCE-HANDOFF.md` | maintainers | the maintained status record: current status and numbers (**§3–§4**, the single source of truth), blockers, backlog, process gotchas, workspace layout, and the `0.1.0`/v0.2.0 history |
-| `TESTING.md` | volunteers | the volunteer procedure: install, first trial, the A/B check, and the one-step feedback tool |
+| `TESTING.md` | volunteers | the volunteer procedure: install, first trial, the A/B check, and deviation reporting |
 | `SECURITY.md` | everyone | what ABG is not, the accepted limits (single source of truth), and how to report a vulnerability |
 | `CONTRIBUTING.md` | contributors | prerequisites, the checks to run (single source of truth), and the project rules |
 | `IMPLEMENTATION-VALIDATION-HANDOFF.md` | agents | retired — a pointer to the §32 gates and the historical build order |
 | `docs/DOCUMENTATION-INDEX.md` | everyone | the document inventory and the single-source-of-truth map |
-| `docs/TASK-FAILURE-REPORT-TEMPLATE.md` | users + maintainers | the template to fill in when reporting a task failure, with the A/B check that separates an ABG defect from a host defect |
-| `plugin/` | implementation agents | the working `dsh-agent-behavioral-governance` prototype: kernel, four modules, and the verification chain |
+| `.github/ISSUE_TEMPLATE/` | users + maintainers | the bug-report and feature-request forms a deviation report uses |
+| `plugin/` | implementation agents | the working `dsh-agent-behavioral-governance` prototype: kernel, four modules, the `abg` terminal interface, and the verification chain |
 | `eval/` | evaluation agents | behavioural and end-to-end evaluation: the harness, the seeded scenarios, the scripted answerer, and the sandbox runs |
 
-## Approved breaking change (not yet implemented)
+## Interface: the `abg` terminal command
 
-The **Web GUI route and the in-harness feedback feature are deprecated and will be
-removed** in the next minor release. The supported interface becomes a terminal
-command, `abg`, run from a Debian shell:
+The supported interface is a terminal command, `abg`, run from a Debian shell.
+Running it with no arguments opens an ANSI numbered menu; every command also works
+non-interactively with flags, because CI and scripts call it.
 
 ```text
-abg start | pause | restart | exit          # control the governance layer
-abg install | update | uninstall           # package lifecycle for a profile
-abg prompt [show | edit | reset]           # display or change the built-in prompt
-abg status                                 # current control state
+abg                      # ANSI numbered menu (also: abg menu)
+abg start                # status=running
+abg pause                # status=paused -> section not emitted, hooks pass through
+abg restart              # status=running, generation+1: reload config and prompt.md
+abg exit                 # status=stopped (governance off for this profile; install untouched)
+abg install   [--profile P] [--from <tarball|dir>]   # npm lifecycle
+abg update    [--profile P] [--from <tarball|dir>]
+abg uninstall [--profile P]
+abg prompt               # print the effective prompt, its version and byte count
+abg prompt edit          # $EDITOR on a temp copy of the effective text; validate; store
+abg prompt reset         # delete prompt.md -> back to the compiled default
+abg status               # control state, generation, timestamps, install/compose state, PROMPT_VERSION
+abg --help / --version
 ```
 
-`start`/`pause` take effect while the harness is running (the plugin re-reads the
-control state each step); `exit` stops governance for the profile. Everything in
-this document still describes **v0.5.1**, the last release with the Web panel and
-feedback; `plugin/CHANGELOG.md` carries the removal list.
+`start`/`pause`/`exit` take effect while the harness is running: the plugin
+re-reads the control state each step. `exit` stops governance for the profile and
+**never uninstalls** — only `install | update | uninstall` touch the installation.
+
+Control state lives in `$ABG_STATE_FILE`, else `<state-dir>/abg/state.json` where
+`<state-dir>` is `$XDG_STATE_HOME` else `~/.local/state`. Prompt text is **not**
+stored inside that JSON: it lives in a sibling `prompt.md`, validated through the
+same kernel the plugin uses for a config-supplied override (no `{{ }}`, byte
+ceiling unless `allowOverBudget`; a refusal keeps the previous text and prints its
+reasons). Precedence is control-plane `prompt.md` > config `prompt.file` (when
+`prompt.mode: replace`) > config `prompt.append` > the compiled default.
+
+ABG **0.6.0 removed** the Web panel and the in-harness issue-reporting feature,
+and replaced them with this terminal interface. `plugin/CHANGELOG.md` carries the
+removal list. Deviation reports are ordinary GitHub issues — see
+[Reporting](#reporting-a-task-failure).
 
 ## Install (prototype only)
 
@@ -79,9 +100,19 @@ flow.
 
 ```bash
 PLUGIN=/path/to/this/repository/plugin
+abg install --profile <your-test-profile>       # npm lifecycle + bundle registration
+abg status  --profile <your-test-profile>       # package, control and composed-row state
+abg uninstall --profile <your-test-profile>     # uninstall / rollback
+```
+
+`abg` is the terminal interface described above: `abg install` uses npm and
+registers the profile bundle itself, so it works without pnpm. If you prefer the
+host's own path (which forwards to pnpm), the equivalent is:
+
+```bash
 dsh plugin --profile <your-test-profile> add "file:$PLUGIN"
 dsh --profile <your-test-profile> --dump-config | grep -A3 'id: abg'   # verify the row composes
-dsh plugin --profile <your-test-profile> remove dsh-agent-behavioral-governance   # uninstall / rollback
+dsh plugin --profile <your-test-profile> remove dsh-agent-behavioral-governance
 ```
 
 Two caveats worth knowing before first use:
@@ -102,19 +133,22 @@ Requirements: Node.js >= 20 and a DeepSeek Harness installation
 The behavioural gates cannot be measured without real sessions, so volunteers are
 the bottleneck for this project. There are two supported ways to get the plugin —
 a release tarball (no git) and a clone — plus a first-trial configuration, an
-A/B procedure, and a redacted one-step reporting tool:
+A/B procedure, and what to capture in a deviation report:
 
 > **[`TESTING.md`](TESTING.md) — volunteer testing guide**
 
 ```bash
-# release tarball — flags such as --from-default-profile belong to the launcher,
-# not to `dsh plugin` (everything after `plugin` is forwarded to pnpm)
-dsh --profile abg-test --from-default-profile headless --dump-config
-dsh plugin --profile abg-test add \
-  "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.5.0/dsh-agent-behavioral-governance-0.5.0.tgz"
+# release tarball
+abg install --profile abg-test \
+  --from https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.6.0/dsh-agent-behavioral-governance-0.6.0.tgz
 
 # or from a clone
 git clone --depth 1 https://github.com/ccneedb/agent-behavioral-governance.git abg
+abg install --profile abg-test --from "$PWD/abg/plugin"
+
+# the host's pnpm path also works; flags such as --from-default-profile belong to
+# the launcher, not to `dsh plugin` (everything after `plugin` is forwarded to pnpm)
+dsh --profile abg-test --from-default-profile headless --dump-config
 dsh plugin --profile abg-test add "file:$PWD/abg/plugin"
 
 # then confirm the row composes into THAT profile
@@ -122,46 +156,39 @@ dsh plugin --profile abg-test add "file:$PWD/abg/plugin"
 ```
 
 The plugin list in a running app shows the bundles of the profile that app
-**runs** — installing into `abg-test` while your GUI runs `web` looks exactly
+**runs** — installing into `abg-test` while your app runs `web` looks exactly
 like a failed install. [`scripts/check-install.sh`](scripts/check-install.sh)
 checks the profile end to end and prints which situation you are in.
 
-**To see the Web GUI panel**, install ABG into the profile you actually **run as a
-Web app** and start that profile. A profile created from the `headless` template
-mounts no web substrate, so no panel can appear there, and running a different
-profile from the one you installed into looks the same as a failed install. If
-ABG fails to configure it mounts nothing and the panel reports "ABG status is
-unavailable" (cause: the `abg.config_invalid` diagnostic). See
-[`TESTING.md`](TESTING.md) §3.
+**To inspect it, use the terminal.** Install ABG into the profile you actually
+run, then `abg status --profile <name>` reports the control state, the effective
+prompt version, and whether the `abg` row composes. `abg pause` / `abg start`
+switch governance for that profile without touching the installation, and
+`abg exit` switches it off. If ABG fails to configure it mounts nothing, and
+`abg status` plus a `dsh --dump-config` grep is how you tell that apart from a
+profile mismatch. See [`TESTING.md`](TESTING.md) §3.
 
-### Feedback from inside the session
-
-Every install ships a read-only tool, **`abg_report_issue`**. When a tester sees a
-behavioural deviation, the agent calls it with a one-line summary; ABG composes a
-prefilled GitHub issue link plus the markdown body, redacted by construction
-(diagnostic payloads, agent/session ids, file contents, prompts, and logs are
-dropped). Nothing is submitted without a human opening the link, and the optional
-`api` mode that files issues directly is strictly opt-in and reads its token from
-the environment.
-
-#### Without pnpm — npm only
+### Install without pnpm
 
 `dsh plugin … add|remove` forwards its arguments to **pnpm** (a real install prints
 `Done in 25ms using pnpm v12.8.1`), and it also registers the profile bundle. Plain
 `npm install` does **not**, so a package installed that way sits on disk without
-ever mounting. To run the whole lifecycle through npm instead:
+ever mounting. The `abg` lifecycle uses npm and maintains `dsh.profile.bundles`
+itself:
 
 ```bash
-./scripts/abg-npm.sh install   --profile abg-test [--from <tarball-or-dir>]
-./scripts/abg-npm.sh status    --profile abg-test
-./scripts/abg-npm.sh update    --profile abg-test
-./scripts/abg-npm.sh uninstall --profile abg-test
+abg install   --profile abg-test [--from <tarball-or-dir>]
+abg status    --profile abg-test
+abg update    --profile abg-test
+abg uninstall --profile abg-test
 ```
 
-The helper maintains `dsh.profile.bundles` (which is what mounts the plugin) and
-refuses to touch `~/.dsh` without `--allow-live`. The package is `"private": true`,
-so there is no registry install; every artifact comes from `npm pack` or a release
-tarball.
+It refuses to touch `~/.dsh` without `--allow-live`, and it defaults npm's cache
+to a writable home-local directory rather than a read-only `~/.npm`. No install of
+any kind has runtime dependencies. The package is `"private": true`, so there is
+no registry install; every artifact comes from `npm pack` or a release tarball.
+`scripts/abg-npm.sh` is a thin wrapper over these commands for callers that used
+it before 0.6.0.
 
 ## Repository layout
 
@@ -172,15 +199,15 @@ ARCHITECTURE-SPEC-AGENT-REFERENCE.md  architecture; Part A verified host seams,
                                       Part B the target design and the §32 gates
 IMPLEMENTATION-VALIDATION-HANDOFF.md  retired pointer to §32 and the build order
 MAINTENANCE-HANDOFF.md                current status and numbers; maintenance gotchas
-TESTING.md                            volunteer install, first trial, and feedback
+TESTING.md                            volunteer install, first trial, and deviation reporting
 SECURITY.md                           boundaries, accepted limits, and reporting
 CONTRIBUTING.md                       prerequisites, checks, and the project rules
 CODE_OF_CONDUCT.md                    Contributor Covenant 2.1
 LICENSE                               MIT
-scripts/                              repository tooling (check-install.sh, check-docs.sh)
-docs/                                 documentation index and the report template
+scripts/                              repository tooling (check-install.sh, check-docs.sh, abg-npm.sh)
+docs/                                 documentation index
 .github/                              CI, issue forms, and the pull-request template
-plugin/                               the implementation and its test suite
+plugin/                               the implementation, the abg CLI, and its test suite
 eval/                                 the behavioural evaluation harness
 ```
 
@@ -202,13 +229,14 @@ installation is present. Point the loader at a non-default install with
 
 ## Working prototype
 
-`plugin/` contains an installable **`dsh-agent-behavioral-governance`** `0.5.0`
+`plugin/` contains an installable **`dsh-agent-behavioral-governance`** `0.6.0`
 (`"private": true`, unpublished) that realizes the architecture above with zero
 runtime dependencies. It contributes one additive prompt section and enforces
 through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
-`ctx.storageDomain`, and it reports its own state through a bounded
-runtime-context status line plus the read-only `abg_status`, `abg_questions`, and
-`abg_report_issue` tools.
+`ctx.storageDomain`; it reports its own state through a bounded runtime-context
+status line plus the read-only `abg_status` and `abg_questions` tools; and it
+ships the `abg` terminal interface for control (`start`/`pause`/`restart`/`exit`),
+`prompt.md` editing, and the npm lifecycle.
 
 The evidence chain — run per [`CONTRIBUTING.md`](CONTRIBUTING.md) §Running the
 checks — covers strict typechecking, the full test suite (no todo, no skip; unit,
@@ -264,16 +292,15 @@ the gate table in
 
 ## Reporting a task failure
 
-Fastest path, from inside the session: ask the agent to call **`abg_report_issue`**
-with a one-line summary of the deviation. It returns a prefilled, redacted GitHub
-issue link and the markdown body — see [`TESTING.md`](TESTING.md) §6.
+A deviation report is an **ordinary GitHub issue**. Use the repository's
+[`.github/ISSUE_TEMPLATE/bug_report.yml`](.github/ISSUE_TEMPLATE/bug_report.yml)
+form (or [`feature_request.yml`](.github/ISSUE_TEMPLATE/feature_request.yml) for a
+capability request) — see [`TESTING.md`](TESTING.md) §6 for what to put in it.
 
-If you prefer to write it yourself, use
-[`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](docs/TASK-FAILURE-REPORT-TEMPLATE.md).
-Either way the most important step is the A/B check: capture `abg_status`, then run
-the same task with ABG disabled ([`TESTING.md`](TESTING.md) §4 shows the correct way
-to disable it). That separates an ABG defect from a host or model defect — which is
-also exactly the measurement Gates C, D, and E need.
+The most important step is the A/B check: capture `abg status --json`, then run the
+same task with ABG disabled (`abg exit`, or `enabled: false`; [`TESTING.md`](TESTING.md)
+§4 shows the correct way). That separates an ABG defect from a host or model defect
+— which is also exactly the measurement Gates C, D, and E need.
 
 ## Canonical architectural statement
 

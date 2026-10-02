@@ -1,17 +1,20 @@
 {
   "name": "dsh-agent-behavioral-governance",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
-  "description": "Agent Behavioral Governance (ABG): an additive project-work governance layer for DeepSeek Harness. Contributes one system-prompt section and uses deterministic runtime seams (agent/pre-step, tools/pre-execute, tools.guard) for enforcement, plus an optional redacted feedback channel for testers. Zero runtime dependencies.",
+  "description": "Agent Behavioral Governance (ABG): an additive project-work governance layer for DeepSeek Harness. Contributes one system-prompt section and uses deterministic runtime seams (agent/pre-step, tools/pre-execute, tools.guard) for enforcement, plus the `abg` terminal interface for control (start/pause/restart/exit), prompt.md editing and the npm lifecycle. Zero runtime dependencies.",
   "type": "module",
   "main": "lib/index.js",
+  "bin": {
+    "abg": "bin/abg"
+  },
   "exports": {
     ".": "./lib/index.js",
-    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "bin",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
@@ -39,13 +42,6 @@
       "dshReleases": {
         "0.2.0-rc.2": "verified"
       }
-    },
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-renderer"
-      ]
     }
   },
   "scripts": {
@@ -53,7 +49,7 @@
     "pretest": "npm run build",
     "test": "node --test",
     "typecheck": "tsc -p tsconfig.json",
-    "prepack": "npm run build && node -e \"const fs=require('fs');const need=['lib/index.js','lib/client.js','lib/generated/kernel/export.js','lib/generated/kernel/prompt-compiler.js','lib/generated/kernel/prompt-override.js','cordis.patch.yml','LICENSE','CHANGELOG.md','README.md'];for(const f of need)fs.accessSync(f);console.log('abg pack: required artifacts present')\""
+    "prepack": "npm run build && node -e \"const fs=require('fs');const need=['lib/index.js','bin/abg','lib/generated/kernel/export.js','lib/generated/kernel/prompt-compiler.js','lib/generated/kernel/prompt-override.js','lib/generated/kernel/control.js','lib/generated/kernel/prompt-store.js','lib/generated/kernel/lifecycle.js','lib/generated/bin/abg.js','cordis.patch.yml','LICENSE','CHANGELOG.md','README.md'];for(const f of need)fs.accessSync(f);console.log('abg pack: required artifacts present')\""
   },
   "devDependencies": {
     "typescript": "^5.8.0 || ^6.0.0"

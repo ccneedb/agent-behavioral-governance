@@ -4,7 +4,7 @@ project: agent-behavioral-governance
 version: 0.1.0
 status: active
 owner: maintainers
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 audience: volunteers
 language: en
 ---
@@ -72,18 +72,17 @@ not ship in the release tarball:
 
 **Why the plugin list can still look empty.** DSH shows the bundles of the
 profile you are **running**, not the ones you installed elsewhere. If you
-installed into `abg-test` while your GUI/app runs the `web` profile, ABG will
-never appear in that list — correctly. Either run the profile you installed into
+installed into `abg-test` while your app runs the `web` profile, ABG will never
+appear in that list — correctly. Either run the profile you installed into
 (`dsh --profile abg-test …`), or install into the profile you actually run:
 
 ```bash
 dsh plugin --profile web add "<same package reference>"
 ```
 
-**The Web GUI panel needs a Web-profile run.** A profile created from the
-`headless` template mounts no web substrate, so the panel cannot appear there at
-all. To see the panel, install ABG into the profile you actually run as a Web app
-and start that profile — see §3.
+**Inspect it from the terminal.** ABG 0.6.0 has no Web panel. Run `abg status`
+(see §3) to see the mount and control state, and `abg pause` / `abg start` to
+switch governance for the profile without touching the installation.
 
 Installing into the live `web` profile modifies it. The project does not
 recommend it while the behavioural gates (C, D, E) are unmeasured — see
@@ -105,45 +104,41 @@ where no approval channel exists (headless, CI). For a first trial, prefer:
     preStep:
       orientationGate: off     # observe only; use 'warn' to see the signal
       requireBeforeMutation: false
-    feedback:
-      enabled: true            # on by default; set false to remove the tool
-      mode: url                # composes a link; no network call, no token
 ```
 
 If you *want* to test the gates themselves, set `policy: ask` or `deny` and
 `requireBeforeMutation: true`, and record what happened — that is the behaviour
 the project most needs evidence about.
 
-### Seeing it in the Web GUI
+### Seeing it from the terminal: `abg`
 
-In a **Web** profile, ABG adds a sidebar entry (the ◆ mark, labelled **ABG**).
-The panel is read-only: mount state, enabled modules, the host-compatibility
-verdict, `PROMPT_VERSION`, whether your prompt override is in force, and the
-diagnostic ring. It reads `/api/abg/status`.
+The terminal interface is the fastest way to answer "is ABG even doing anything?",
+which is otherwise indistinguishable from silence. Build it once and put it on
+`PATH`:
 
-The panel exists **only in a Web-profile run**: a `headless`-template profile
-mounts no web substrate, and DSH only lists the profile you are running, so
-install into — and start — the profile you actually run as a Web app. If the
-panel says the status is unavailable, the plugin's host half is not mounted in
-this profile (a configuration fault records `abg.config_invalid`); check with
-`./scripts/check-install.sh <profile>`.
+```bash
+cd plugin && npm run build
+export PATH="$PWD/bin:$PATH"
 
-The panel is the fastest way to answer "is ABG even doing anything?", which is
-otherwise indistinguishable from silence. It also gives you the two controls:
+abg status                 # control status, generation, prompt and install/compose state
+abg pause                  # governance section suppressed, hooks pass through
+abg start                  # back to normal
+abg restart                # generation+1: reload config and prompt.md
+abg exit                   # governance off for this profile; the install is untouched
+```
 
-- **Prompt** — edit the section text and press **Apply**; it takes effect on the
-  next step. This is only enabled when the profile sets `prompt.mode: replace`
-  and `prompt.file: <path>`; otherwise the textarea is read-only and the panel
-  says why. Refused edits (an `{{ }}` in the text, or over the byte budget) are
-  shown inline, and the panel lists which conformance invariants no longer apply
-  to user-written text.
-- **Report a deviation** — fill the three fields and press **Preview** to compose
-  the redacted report, then **Copy report** or **Open prefilled issue**. In
-  opt-in `api` mode a **File issue** button submits it directly.
-
-Use **Revert** to restore the last applied text before re-applying, and prefer
-editing the settings overlay when you want a change to be reproducible for the
-next person — the editor writes exactly the file named by `prompt.file`.
+- **`abg prompt`** prints the effective section, its version and its byte count;
+  **`abg prompt edit`** opens `$EDITOR` on a temp copy and stores the result only
+  after the same validation the plugin applies (`{{ }}` and the byte ceiling are
+  refused, with reasons); **`abg prompt reset`** deletes `prompt.md` and returns
+  to the compiled default.
+- `prompt.md` lives beside the control-state file (`$ABG_STATE_FILE`, else
+  `<state-dir>/abg/state.json` with `<state-dir>` = `$XDG_STATE_HOME` or
+  `~/.local/state`). The plugin re-reads it on `restart`.
+- Every command also works non-interactively with flags (`--state`, `--json`,
+  …) because CI and scripts call it; run `abg` with no arguments for the ANSI
+  menu, or `abg --help` for the full surface.
+- Use `abg status --json` to capture machine-readable state for a report.
 
 ## 4. What a useful trial looks like
 
@@ -156,76 +151,64 @@ next person — the editor writes exactly the file named by `prompt.file`.
    §Install), or use a second profile with no ABG row. This A/B is the single most
    valuable thing you can contribute: it separates an ABG defect from a host or
    model defect.
-4. **Capture state** by asking the agent to call `abg_status`, or read
-   `abg_report_issue` for the composed report.
+4. **Capture state** by asking the agent to call `abg_status`, or by running
+   `abg status --json`, or by reading the diagnostics mirror if the profile sets
+   `diagnosticsExport.file`.
 
 Metrics the project is trying to establish are listed in
 [`eval/README.md`](eval/README.md): questions per batch, user interruptions,
 false blocks, and whether known-invalid information stops being reused.
 
-#### Method C — npm only (no pnpm required)
+#### Method C — the `abg` lifecycle (npm only, no pnpm required)
 
-If pnpm is unavailable, the same lifecycle runs through npm:
+If pnpm is unavailable, the same lifecycle runs through the `abg` terminal
+interface, which uses npm and registers the profile bundle itself:
 
 ```bash
-./scripts/abg-npm.sh install   --profile abg-test
-./scripts/abg-npm.sh status    --profile abg-test
-./scripts/abg-npm.sh uninstall --profile abg-test
+abg install   --profile abg-test                 # npm pack + npm install + bundle registration
+abg status    --profile abg-test                 # package, manifest and composed-row state
+abg uninstall --profile abg-test
 ```
 
 `dsh plugin` forwards to pnpm and additionally registers the profile bundle; plain
-`npm install` does not, which is why the helper exists. It never touches `~/.dsh`
-without `--allow-live`. These scripts need a clone (they are not in the tarball).
+`npm install` does not, which is why the command exists. It never touches `~/.dsh`
+without `--allow-live`, and it defaults npm's cache to a writable home-local
+directory rather than a read-only `~/.npm`. `scripts/abg-npm.sh` is a thin
+wrapper over these commands for callers that already used it; see
+[`plugin/README.md`](plugin/README.md) §Terminal interface.
 
 ## 5. Uninstall
 
-Use the uninstall command in [`README.md`](README.md) §Install. Nothing else is
-required: governance state lives in the profile's `ctx.storageDomain`, and any
-`prompt.file` or `diagnosticsExport.file` you configured stays where you put it.
+Use `abg uninstall --profile <name>` (or the uninstall command in
+[`README.md`](README.md) §Install). Note that governance state lives in the
+profile's `ctx.storageDomain`, and any `prompt.file` or `diagnosticsExport.file`
+you configured stays where you put it.
+
+**`abg exit` is not uninstall.** It sets the profile's control status to
+`stopped`: no governance prompt section is emitted and every hook passes through,
+but the package stays installed and `abg start` resumes it. Only
+`abg install | update | uninstall` touch the installation.
 
 ## 6. Report a behavioural deviation
 
-Every install ships a read-only tool, **`abg_report_issue`**. Ask the agent:
+A deviation report is an **ordinary GitHub issue**. Use the repository's issue
+form:
 
-> Call `abg_report_issue` with a one-line summary of what deviated, plus what you
-> expected and what happened.
+- **Bug report** — [`.github/ISSUE_TEMPLATE/bug_report.yml`](.github/ISSUE_TEMPLATE/bug_report.yml)
+- **Feature request** — [`.github/ISSUE_TEMPLATE/feature_request.yml`](.github/ISSUE_TEMPLATE/feature_request.yml)
 
-It returns:
+Include, in the form's own fields:
 
-- `issue_url` — a **prefilled GitHub issue link**, ready to open and submit;
-- `markdown` — the same body, for pasting into the issue or a chat;
-- `filed` — `true` only if the deployment opted into API mode and the issue was
-  actually created.
+1. the task you ran and the workspace shape (a copy you can share);
+2. the A/B result from §4 — the same task with `abg exit` (or `enabled: false`);
+3. `abg status --json`, which carries the plugin version, `PROMPT_VERSION`, the
+   control state and generation, and the install/compose state;
+4. what you expected and what happened, in project terms.
 
-The report is **redacted by construction**. It contains the mount record,
-degraded capabilities, the compatibility verdict, and diagnostic *codes* — and
-deliberately excludes diagnostic payloads, agent and session identifiers, file
-contents, prompts, session logs, and credentials. Read it before submitting; you
-can edit it freely in the GitHub form.
-
-If you prefer to write it yourself, use
-[`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](docs/TASK-FAILURE-REPORT-TEMPLATE.md) —
-it asks for the same fields, including the A/B check from §4.
-
-### Optional: file issues directly
-
-If you are comfortable giving the process a token, `api` mode posts the report
-without leaving the session:
-
-```bash
-export ABG_GITHUB_TOKEN=<fine-grained token, Issues: read and write on this repository>
-```
-
-```yaml
-- id: abg
-  config:
-    feedback:
-      mode: api
-```
-
-The token is read from the environment only, never from configuration and never
-persisted by ABG. Without it, `api` mode degrades to the prefilled link rather
-than failing.
+Read `abg status` (and any diagnostics you quote) before posting: it names paths
+and versions, not file contents, but you are responsible for what you paste.
+Do not include credentials, private file contents, or session logs; see
+[`SECURITY.md`](SECURITY.md).
 
 ## 7. Before filing: things that are not bugs
 
@@ -236,6 +219,6 @@ filing: an accepted limit costs maintainer time. Gate C, D, or E evidence is not
 
 ## 8. Privacy
 
-Reports are public once you submit them. The composed body is redacted, but the
-free-text fields you write are yours: do not paste credentials, private file
-contents, or session logs. See [`SECURITY.md`](SECURITY.md).
+Reports are public once you submit them. The free-text fields you write are
+yours: do not paste credentials, private file contents, or session logs. See
+[`SECURITY.md`](SECURITY.md).

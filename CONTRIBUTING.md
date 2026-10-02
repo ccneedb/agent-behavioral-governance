@@ -4,7 +4,7 @@ project: agent-behavioral-governance
 version: 0.1.0
 status: active
 owner: maintainers
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 audience: contributors
 language: en
 ---
@@ -42,13 +42,13 @@ export ABG_DSH_PACKAGES=/path/to/node_modules/@deepseek-ai
 | `PRODUCT-SPEC.md` | positioning, scope, goals, success criteria |
 | `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` | architecture; **§17** verified host seams, **§18** deltas, **§32** gates, **Part B (§§22–34)** the target design |
 | `MAINTENANCE-HANDOFF.md` | current status and numbers (**§3–§4**), blockers, backlog, process gotchas |
-| `TESTING.md` | volunteer install, first trial, A/B check, and feedback |
+| `TESTING.md` | volunteer install, first trial, A/B check, and deviation reporting |
 | `SECURITY.md` | boundaries, accepted limits, and vulnerability reporting |
 | `IMPLEMENTATION-VALIDATION-HANDOFF.md` | retired — a pointer to the §32 gates and the build order |
 | `docs/DOCUMENTATION-INDEX.md` | document inventory and the single-source-of-truth map |
-| `docs/TASK-FAILURE-REPORT-TEMPLATE.md` | the template to fill in when reporting a task failure |
-| `scripts/` | repository tooling: `check-install.sh`, `check-docs.sh` |
-| `plugin/` | the implementation: kernel, four modules, tests, and `scripts/verify.sh` |
+| `.github/ISSUE_TEMPLATE/` | the issue forms a deviation report and a feature request use |
+| `scripts/` | repository tooling: `check-install.sh`, `check-docs.sh`, `abg-npm.sh`, `abg-npm-lifecycle-check.sh` |
+| `plugin/` | the implementation: kernel, four modules, the `abg` terminal interface, tests, and `scripts/verify.sh` |
 | `eval/` | behavioural and end-to-end evaluation harness and scenarios |
 
 ## Running the checks

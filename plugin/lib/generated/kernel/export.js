@@ -2,9 +2,10 @@
  * ABG kernel — opt-in diagnostics export (`ARCHITECTURE-SPEC` §28.7).
  *
  * The diagnostic ring lives inside the running host process. A front end — the
- * Web GUI panel, a terminal, a bug report — cannot read it directly, which is
- * why `abg_status` exists. This module adds the machine-readable half: a small
- * JSON mirror the process writes to a path the deployment chooses.
+ * `abg` terminal interface, a script, a bug report — cannot read it directly,
+ * which is why `abg_status` exists. This module adds the machine-readable half: a
+ * small JSON mirror the process writes to a path the deployment chooses, and
+ * `abg status` is its reader.
  *
  * Design constraints, in order:
  *

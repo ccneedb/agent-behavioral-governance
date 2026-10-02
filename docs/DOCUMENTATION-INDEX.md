@@ -4,7 +4,7 @@ project: agent-behavioral-governance
 version: 0.1.0
 status: active
 owner: maintainers
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 audience: everyone
 language: en
 ---
@@ -40,17 +40,16 @@ pull-request body. Their owner and review date are recorded in the tables below.
 
 | Document | doc_type | Position — the question it answers | Audience | Owner | last_reviewed | Status |
 |---|---|---|---|---|---|---|
-| [`README.md`](../README.md) | readme | What is this project, and where do I start? | everyone | maintainers | 2026-10-02 | active |
+| [`README.md`](../README.md) | readme | What is this project, and where do I start? | everyone | maintainers | 2026-10-03 | active |
 | [`PRODUCT-SPEC.md`](../PRODUCT-SPEC.md) | product-spec | What is ABG for, what does it promise, and what is out of scope? | humans + agents | maintainers | 2026-10-02 | active |
-| [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) | architecture-spec | How is it built: which verified host seams, which module contracts, and what is the target design? | implementing/reviewing agents | maintainers | 2026-10-02 | active |
-| [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md) | maintenance-handoff | What is the current status and what trips up a maintainer? | maintainers | maintainers | 2026-10-02 | active |
-| [`TESTING.md`](../TESTING.md) | testing-guide | How does a volunteer install, configure, trial and report? | volunteers | maintainers | 2026-10-02 | active |
+| [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) | architecture-spec | How is it built: which verified host seams, which module contracts, and what is the target design? | implementing/reviewing agents | maintainers | 2026-10-03 | active |
+| [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md) | maintenance-handoff | What is the current status and what trips up a maintainer? | maintainers | maintainers | 2026-10-03 | active |
+| [`TESTING.md`](../TESTING.md) | testing-guide | How does a volunteer install, configure, trial and report? | volunteers | maintainers | 2026-10-03 | active |
 | [`SECURITY.md`](../SECURITY.md) | security-policy | What is ABG not, what are its accepted limits, and how is a vulnerability reported? | everyone | maintainers | 2026-10-02 | active |
-| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | contributing | How do I contribute, and which checks gate a change? | contributors | maintainers | 2026-10-02 | active |
+| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | contributing | How do I contribute, and which checks gate a change? | contributors | maintainers | 2026-10-03 | active |
 | [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) | code-of-conduct | How must participants behave? | everyone | maintainers | 2026-10-02 | active |
 | [`IMPLEMENTATION-VALIDATION-HANDOFF.md`](../IMPLEMENTATION-VALIDATION-HANDOFF.md) | implementation-handoff | Where did the original build order and acceptance gates go? | agents | maintainers | 2026-10-02 | retired — thin pointer |
-| [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](TASK-FAILURE-REPORT-TEMPLATE.md) | template | How do I file a task failure so it can be triaged? | users + maintainers | maintainers | 2026-10-02 | active |
-| [`docs/DOCUMENTATION-INDEX.md`](DOCUMENTATION-INDEX.md) | documentation-index | Which document owns which information? | everyone | maintainers | 2026-10-02 | active |
+| [`docs/DOCUMENTATION-INDEX.md`](DOCUMENTATION-INDEX.md) | documentation-index | Which document owns which information? | everyone | maintainers | 2026-10-03 | active |
 
 ## Auxiliary files (no front matter, by design)
 
@@ -86,10 +85,11 @@ and leave the link.
 | Acceptance gates and evaluation method | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §30.4, §32 | [`README.md`](../README.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`IMPLEMENTATION-VALIDATION-HANDOFF.md`](../IMPLEMENTATION-VALIDATION-HANDOFF.md), [`eval/README.md`](../eval/README.md) |
 | Current status and numbers | [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md) §3–§4 | [`README.md`](../README.md) §Status, [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §21, §33, [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`TESTING.md`](../TESTING.md) intro, [`PRODUCT-SPEC.md`](../PRODUCT-SPEC.md) §11 |
 | Install / update / uninstall — installing ABG into a profile | [`README.md`](../README.md) §Install | [`TESTING.md`](../TESTING.md) §2, §5, [`plugin/README.md`](../plugin/README.md) (package-level npm lifecycle) |
-| Volunteer test procedure (first trial, A/B check, feedback) | [`TESTING.md`](../TESTING.md) | [`README.md`](../README.md) §Install, [`plugin/README.md`](../plugin/README.md) §Feedback |
-| Known limitations — accepted limits, not bugs | [`SECURITY.md`](../SECURITY.md) §Known limitations | [`TESTING.md`](../TESTING.md) §7, [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](TASK-FAILURE-REPORT-TEMPLATE.md) §12, [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §34.3 |
-| Security reporting | [`SECURITY.md`](../SECURITY.md) §Reporting a vulnerability | [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md), [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](TASK-FAILURE-REPORT-TEMPLATE.md) |
-| Task-failure report template | [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](TASK-FAILURE-REPORT-TEMPLATE.md) | [`README.md`](../README.md) §Reporting, [`TESTING.md`](../TESTING.md) §6, [`.github/ISSUE_TEMPLATE/bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml) |
+| The `abg` terminal interface — control, prompt.md and the menu | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §28.6 | [`README.md`](../README.md) §Interface, [`plugin/README.md`](../plugin/README.md) §Terminal interface, [`TESTING.md`](../TESTING.md) Method C |
+| Volunteer test procedure (first trial, A/B check, deviation report) | [`TESTING.md`](../TESTING.md) | [`README.md`](../README.md) §Install, [`plugin/README.md`](../plugin/README.md) §Verification |
+| Known limitations — accepted limits, not bugs | [`SECURITY.md`](../SECURITY.md) §Known limitations | [`TESTING.md`](../TESTING.md) §7, [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §34.3 |
+| Security reporting | [`SECURITY.md`](../SECURITY.md) §Reporting a vulnerability | [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) |
+| Deviation reports — an ordinary GitHub issue, not a bespoke template | [`.github/ISSUE_TEMPLATE/bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml) | [`README.md`](../README.md) §Reporting, [`TESTING.md`](../TESTING.md) §6, [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | Maintenance gotchas — environment and process traps | [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md) §7 | [`TESTING.md`](../TESTING.md) §2, [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`eval/README.md`](../eval/README.md) |
 | How to run the checks (build, typecheck, tests, `verify.sh`, `check-docs.sh`) | [`CONTRIBUTING.md`](../CONTRIBUTING.md) §Running the checks | [`README.md`](../README.md) §Development, [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md) §2, [`plugin/README.md`](../plugin/README.md) §Verification |
 | TypeScript migration policy, exceptions, and the build | [`plugin/TYPESCRIPT-MIGRATION.md`](../plugin/TYPESCRIPT-MIGRATION.md) | [`CONTRIBUTING.md`](../CONTRIBUTING.md) §Running the checks, [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §31.2 |

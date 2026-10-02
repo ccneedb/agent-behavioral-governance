@@ -4,11 +4,11 @@ project: agent-behavioral-governance
 version: 0.6.0
 status: active
 owner: maintainers
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 revision: status-home-and-gates-consolidated
 part_a: verified-host-integration-and-prototype-0.1.0
-part_b: target-design-baseline-0.2.0-extended-through-0.5.0
-part_b_status: implemented-through-the-0.5.0-gui-round; model-backed-gates-c-d-e-pending
+part_b: target-design-baseline-0.2.0-extended-through-0.6.0
+part_b_status: implemented-through-the-0.6.0-control-plane-round; model-backed-gates-c-d-e-pending
 verified_against: dsh-v0.2.0-rc.2
 verified_method: installed-distribution-source-inspection
 audience: agents-only
@@ -22,7 +22,7 @@ format_note: conservative-machine-readable-markdown
 
 > **Audience:** agents implementing, reviewing, or extending this plugin inside DeepSeek Harness. This document is intentionally more implementation-oriented than the Product Specification.
 >
-> **Two parts.** Sections 1–21 ("Part A") are the verified record of host integration and of the `0.1.0` prototype. Sections 22–34 ("Part B") carry the **target design**, whose baseline is ABG v0.2.0 and which was extended through the v0.4.0 front-end and v0.5.0 GUI rounds. Part B states where it changes a Part A decision instead of rewriting Part A. Current implementation status and numbers live in [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4.
+> **Two parts.** Sections 1–21 ("Part A") are the verified record of host integration and of the `0.1.0` prototype. Sections 22–34 ("Part B") carry the **target design**, whose baseline is ABG v0.2.0 and which was extended through the v0.6.0 control-plane round. Part B states where it changes a Part A decision instead of rewriting Part A. Current implementation status and numbers live in [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4.
 
 ## 1. Architectural Objective
 
@@ -825,8 +825,10 @@ behavioural suite with `npm test` in `plugin/`.
 # Part B — Target Design (baseline ABG v0.2.0)
 
 > **Status.** Part B began as the v0.2.0 design and now also carries the later
-> rounds: v0.3.0 feedback (§28.6), the v0.4.0 front-end (editable prompt §27.1,
-> diagnostics mirror §28.7), and the v0.5.0 GUI (§28.8). It is grounded in Part
+> rounds: the v0.3.0/v0.4.0 front-end work (editable prompt §27.1, diagnostics
+> mirror §28.7), which the v0.6.0 control-plane round (§28.6) re-homed onto the
+> `abg` terminal interface after the browser route and in-harness issue reporter
+> were removed. It is grounded in Part
 > A's verified seams and does not retroactively rewrite Part A. Current
 > implementation status and numbers are maintained once, in
 > [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4; the phase plan is §33
@@ -1242,7 +1244,8 @@ behavioural claim still names exactly one text (PR-07).
 verified on arbitrary user text. They are returned as `promptUnchecked`
 (`UNCHECKED_INVARIANTS`) and recorded with `abg.prompt_override_applied`, so no
 front end may present a user-edited prompt as an audited one. This is the
-mechanism by which the GUI can offer free editing without the project claiming a
+mechanism by which the `abg` terminal interface can offer free editing without the
+project claiming a
 guarantee it cannot make.
 
 ## 28. Diagnosability Specification
@@ -1274,6 +1277,8 @@ abg.mount  abg.config_invalid  abg.capability_missing
 abg.module_enabled  abg.module_conflict
 abg.host_compatibility  abg.prompt_assembly
 abg.prompt_override_applied  abg.prompt_override_rejected  abg.prompt_override_missing
+abg.control_paused  abg.control_resumed  abg.control_stopped
+abg.control_generation_changed  abg.control_state_unreadable
 abg.diagnostics_export_failed
 abg.orientation_recorded  abg.orientation_restored  abg.orientation_required
 abg.question_registered  abg.question_batch_created  abg.question_deferred
@@ -1325,55 +1330,85 @@ plugin-facing `ignorable` write path or an explicit exemption.
   Status: implemented 2026-10-02 (`degraded[]` in the mount record plus
   `abg.capability_missing` for an absent seam).
 
-### 28.6 Optional feedback channel (v0.3.0)
+### 28.6 Control plane and terminal interface (v0.6.0)
 
-The prototype's blocking evidence is behavioural, so it can only come from real
-sessions run by volunteers. A tester who observes a deviation must be able to
-report it **in one step**, from inside the session, without assembling environment
-details by hand.
+ABG is turned on and off for a profile from a Debian shell, through one command,
+`abg`. This round **replaces** the removed browser route and in-harness
+issue-reporting feature with that interface; the diagnostics ring and its opt-in
+mirror (§28.7) are
+unchanged, and the CLI is now the mirror's reader.
 
-**Design.** One additional read-only tool, `abg_report_issue`, registered in the
-same guarded step as the other tools. It is a *kernel capability*, not a fifth
-governance module: feedback is not a failure class, and adding a module would
-disturb the §24 failure-class coverage contract for no governance benefit.
+**Two modes, one implementation.** Bare `abg` renders a numbered ANSI menu (plain
+escape codes; no ncurses, no dependency, usable over SSH). Every command is also
+available non-interactively with flags, because CI and scripts call it. The menu
+dispatches to the same handlers the flags do, so the two cannot drift. Parsing,
+rendering, and the `$EDITOR` invocation are hand-rolled over Node builtins: the
+package keeps its zero-runtime-dependency property.
 
-Two properties are the whole design:
+**The control record.** `abg start | pause | restart | exit` writes one small
+JSON record, `{schema, status, generation, updatedAt, editor?}`, where `status` is
+`running` | `paused` | `stopped`. It resolves to `$ABG_STATE_FILE`, else
+`<state-dir>/abg/state.json` with `<state-dir>` = `$XDG_STATE_HOME` or
+`~/.local/state`. Writes are atomic (sibling temporary file, then rename). An
+**absent** file means `running`, so every pre-0.6.0 install behaves exactly as
+before; an unparsable file also means `running`, with the reason recorded as
+`abg.control_state_unreadable` — corruption never switches governance off and never
+crashes the host.
 
-1. **It never files anything by itself.** `feedback.mode: url` (the default)
-   composes a prefilled `github.com/<owner>/<repo>/issues/new` link and the
-   markdown body; no network call is made and no credential is read. A human
-   decides to submit. `mode: api` is strictly opt-in, reads its token from the
-   environment variable named by `feedback.tokenEnvVar` (default
-   `ABG_GITHUB_TOKEN`) — never from configuration, which is committed and shared —
-   and **fails open**: an absent token, a refused request, or a network fault
-   returns the prefilled link instead of an error.
-2. **Redaction by construction.** Diagnostic entries are reduced to
-   `code`/`time`/`module`; `data` (which can carry paths or free text), agent ids,
-   and session ids are dropped *before* composition.
-   `plugin/test/unit/feedback.test.js` plants a secret and a private path in a
-   diagnostic payload and asserts neither appears in the body or the URL, so the
-   channel cannot silently become a disclosure path.
+**Gating in the plugin.** `lib/index.js` re-reads the record, cached by mtime (and
+size, to close a same-millisecond write window); a re-stat per assembly and per
+step is allowed. `paused` emits no prompt section and passes every hook through;
+`stopped` mounts nothing active, exactly like `enabled: false`; `running` is
+normal. Each transition is recorded once — `abg.control_paused`,
+`abg.control_resumed`, `abg.control_stopped`. `restart` bumps `generation`, and a
+changed generation is the signal to invalidate the cached configuration and prompt
+so the next step re-reads on-disk truth, recorded as
+`abg.control_generation_changed`.
 
-**Why a tool and not prompt text.** Tool descriptions are already model-visible,
-so discoverability does not need a sentence in the compiled section. That keeps
-`PROMPT_VERSION` unchanged (no §22.3 prompt-revision claim) and leaves the §11
-byte budget untouched — a deliberate application of P7 to the plugin's own feature.
+**Prompt text in `prompt.md`.** Prompt text is deliberately **not** stored inside
+the control JSON: it lives in a sibling `prompt.md`, so the record stays a small
+stable control object and the text stays something a human edits as text.
+`abg prompt` prints the effective text with its version and byte count;
+`abg prompt edit` opens `$EDITOR` on a temporary copy and stores the result only
+after validation; `abg prompt reset` deletes the file and returns to the compiled
+default. Precedence is
 
-**Configuration.** `feedback{enabled, mode, repository, tokenEnvVar, labels,
-includeDiagnostics}`, strictly validated like every other key. `enabled` defaults
-to `true` because `url` mode is inert; a deployment that does not want the tool
-sets it to `false`.
+```text
+control-plane prompt.md                                 (highest)
+  > config prompt.file   (only when prompt.mode: replace)
+  > config prompt.append (only when prompt.mode: append)
+  > the compiled default                                (lowest)
+```
 
-**Evidence.** Unit tests cover redaction, URL composition and truncation (the URL
-payload is bounded at 6,000 bytes and says so rather than emitting a mangled
-link), `url` mode making zero network calls, `api` mode filing exactly once and
-reporting the issue URL, and fail-open on a rejected or broken API. The
-installed-artifact proof in `verify.sh` asserts the tool is registered.
+and `prompt.mode: compiled` forces the compiled default whenever no `prompt.md`
+exists. Every candidate is validated through the existing `composePromptOverride`
+kernel, so the CLI, a config-supplied file, and the compiled default obey the same
+two hard rules — no `{{ }}` interpolation syntax, and the byte ceiling unless
+`allowOverBudget` — and an accepted override is attributed
+`PROMPT_VERSION+user:<hash>`. A refusal changes nothing, keeps the previous text,
+and prints its reasons; it is never a silent no-op.
+
+**`exit` is not uninstall.** `exit` sets `status: stopped` for the profile. Only
+`abg install | update | uninstall` touch the installation. The lifecycle is
+npm-native (the host's `dsh plugin` path hard-codes pnpm): it packs `plugin/` with
+`npm pack`, installs the artifact into `<DSH_HOME>/profiles/<p>`, and maintains
+`dsh.profile.bundles` itself, so the `abg` row composes without pnpm. It refuses to
+write the live `$HOME/.dsh` without `--allow-live` (exit 2) and defaults npm's
+cache to a writable home-local directory, because a read-only `~/.npm` fails every
+npm operation before it starts. `scripts/abg-npm.sh` is a thin wrapper over these
+commands, so the lifecycle has one implementation, not two.
+
+**Evidence.** The kernel modules (`control`, `prompt-store`, `lifecycle`) have
+unit suites; `plugin/scripts/verify.sh` adds a CLI smoke check (status plus
+pause/start transitions on an isolated `--state`), a `prompt.md` round-trip
+including a refused `{{ }}` edit, and a gating check that a `paused` control state
+suppresses the section. The installed-artifact proof still applies the shipped
+`cordis.patch.yml` verbatim.
 
 ### 28.7 Opt-in diagnostics mirror (v0.4.0)
 
 The ring of §28.3 lives inside the running host process; a separate front end —
-the Web GUI panel, a terminal, a bug report — cannot read it, which is why
+the `abg` terminal interface, a bug report — cannot read it, which is why
 `abg_status` exists as a tool. This section adds the machine-readable half for
 front ends: `diagnosticsExport{file, limit}` mirrors a bounded snapshot (mount
 record, status line, counts, and the newest `limit` diagnostics) to a JSON file
@@ -1395,83 +1430,6 @@ Constraints, in the order they matter:
 
 The writer is injected into the kernel module, so throttling, bounding, and the
 failure path are unit-tested without touching a filesystem.
-
-### 28.8 Web GUI panel and its data route (v0.4.0)
-
-ABG ships a browser half so an operator can see governance state without reading
-a transcript or calling a tool. Verified end to end in a workspace-local web
-profile (never the live profile): the sidebar entry registers, the panel opens,
-and it renders the mount record, the status line, and the diagnostic ring.
-
-**The panel exists only in a Web-profile run.** A profile created from the
-`headless` template mounts no web server or client substrate, so there is no
-surface for the panel to attach to. DSH also lists the bundles of the profile it
-is *running*, so installing ABG into one profile while running another looks
-identical to a failed install. To see the panel, install ABG into the profile
-that is actually run as a Web app and start that profile. If ABG fails to
-configure it mounts nothing and the panel reports "ABG status is unavailable",
-with the cause recorded as the `abg.config_invalid` diagnostic;
-`scripts/check-install.sh <profile>` distinguishes the two situations.
-
-**Data path.** The host registers one exact route on `ctx.webServer`
-(`@deepseek-ai/dsh-host-webserver`), `STATUS_ROUTE_PATH = /api/abg/status`,
-returning the same JSON contract as `abg_status` and the diagnostics mirror, so
-all three front ends read one shape. The route sits under `/api`, i.e. behind the
-deployment's browser-trust fence, is registered in its own guarded step through
-`ctx.inject(['webServer'])`, and leaves no response open on failure. An absent
-web server is an optional seam, not a degradation — but the *absence of the
-route* is recorded in-band (`abg.gui_route_registered` when it registers,
-`abg.capability_missing` when the service is missing), because an `inject` that
-never fires is otherwise indistinguishable from a route that does.
-
-**Client bundle — hand-authored, and why.** A DSH client plugin is a package
-`dsh.client{platform:'web'}` declaration plus a `./client` export, and the host
-fails activation loudly when the bundle is missing. First-party packages ship a
-`lib/client.js` produced by the monorepo's `pnpm run build` (tsdown); there is no
-public out-of-tree build. `plugin/lib/client.js` is therefore written directly
-against the two documented contracts: the lazy-CJS envelope
-`window.__ModuleLoader__.load({id, factory})` whose `require` resolves only the
-frozen baseline, and the slot registry (`inject = ['slots']`,
-`ctx.slots.inject('sidebar.panellist' | 'main', …)`, `ctx.slots.register({…}, C)`).
-It registers one panel identity in two seats. It is excluded from `tsc` for the
-same reason first-party built client artifacts are: it is a browser artifact, not
-Node source.
-
-**Write routes, and why they are safe to expose.** The prompt editor and the
-feedback form are the first ABG surfaces that accept input from a browser, so
-they are gated on three rules:
-
-- `GET /api/abg/status` additionally reports the editor's view (`prompt.mode`,
-  `prompt.file`, the effective text, bytes against the §11 budget, `issues`,
-  `promptUnchecked`) and the feedback mode;
-- `POST /api/abg/prompt` accepts `{ text }`, decides through the **same**
-  `composePromptOverride` the file and the config use, writes the result through
-  a temporary sibling and a rename, and only then adopts it in memory — so a
-  panel that says "applied" is reporting a durable fact. Editing is **disabled**
-  (409) unless `prompt.mode` is `replace` and `prompt.file` names a path: there is
-  deliberately no default write target, so a deployment that never opted in gets a
-  read-only editor rather than a surprise file. Refusals return 422 with the
-  issues, and the refusal is recorded as `abg.prompt_override_rejected` with
-  `source: gui`;
-- `POST /api/abg/feedback` composes through `composeFeedback`, so the redaction
-  tests cover the browser path; `file: true` is honoured only in `api` mode and
-  otherwise explains that the link is the answer.
-
-Both live under `/api`, i.e. behind the deployment's browser-trust fence, bound
-the request body (`MAX_REQUEST_BYTES`), reject the wrong method (405), and never
-let a write failure escape the handler.
-
-**Live application.** The section's `text` is a function-valued provider, which
-the host re-evaluates per assembly, so an editor write takes effect on the next
-step without a restart; the live prompt facts (text, bytes, version, issues,
-`unchecked`) are held in one mutable record that the status route, the section
-provider and the feedback report all read.
-
-**Consequence for this project's properties.** The Node half still imports
-nothing first-party; `dsh.client.inject` names package *rows*, not Node imports.
-The cost is real and recorded: the bundle is coupled to this host version and must
-be re-verified against any new release, which the acceptance matrix covers by
-running the web-profile check.
 
 ## 29. Compatibility Adapter Specification
 
@@ -1625,7 +1583,7 @@ unnecessary after the first answer must produce no redundant question.
 
 | Gate | Statement | Status | Evidence |
 |---|---|---|---|
-| A — Host compatibility | ABG is additive and the host prompt survives | **met** | `test/integration/composition.test.js`; `verify.sh` composes the real row and proves the installed artifact binds one section, three listeners, and five tools |
+| A — Host compatibility | ABG is additive and the host prompt survives | **met** | `test/integration/composition.test.js`; `verify.sh` composes the real row and proves the installed artifact binds one section, three listeners, and four tools |
 | B — Semantic non-conflict | no module contradicts an identified host semantic | **met** | executable prompt-conformance suite; Part A's seam review |
 | C — Behavioural improvement | at least one target failure mode improves measurably against baseline | **unmet** | the only measurements ever taken were against the five-module prompt; they were deleted as superseded, so no valid number exists for the current revision |
 | D — User-attention efficiency | batching reduces interactions without suppressing critical uncertainty | **unmet** | the ledger, gate, and `abg_questions` surface are verified; the end-to-end measurement (§30.4) is not |

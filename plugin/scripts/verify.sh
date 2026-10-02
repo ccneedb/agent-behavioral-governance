@@ -27,6 +27,7 @@ set -euo pipefail
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_DIR="$(cd "${PLUGIN_DIR}/.." && pwd)"
 DSH_BIN="${DSH_BIN:-dsh}"
+NODE_BIN="${NODE_BIN:-node}"
 VERIFY_ROOT="${ABG_VERIFY_HOME:-${REPO_DIR}/.abg-verify}"
 export DSH_HOME="${VERIFY_ROOT}/dsh-home"
 
@@ -168,11 +169,32 @@ PROBE="${VERIFY_ROOT}/probe-installed.mjs"
 cat >"$PROBE" <<'JS'
 import assert from 'node:assert/strict'
 
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, utimesSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 const abg = await import(`${process.argv[2]}/lib/index.js`)
+
+// The control plane is pointed at a throwaway state file (argument 3) so the
+// gating assertion below can drive `pause`/`start` without touching the real
+// `$ABG_STATE_FILE` of the invoking user.
+const stateFile = path.join(process.argv[3], 'state.json')
+process.env.ABG_STATE_FILE = stateFile
+
+/** Write one control record and force a strictly increasing mtime, so the plugin's mtime cache sees it. */
+let controlClock = Date.now()
+function setControl(status, generation) {
+  // Advance a whole second per write. `utimesSync` lands on a coarse clock, so a
+  // mtime derived from `Date.now()` alone can repeat when two writes occur inside
+  // the same millisecond — which is exactly what this probe does. A repeated mtime
+  // with an equal-size record is invisible to the plugin's mtime cache, so the
+  // generation bump would not be observed. A monotonic clock keeps the probe
+  // testing the reload rather than the filesystem clock's resolution.
+  controlClock += 1000
+  const now = new Date(controlClock)
+  writeFileSync(stateFile, JSON.stringify({ schema: 1, status, generation, updatedAt: now.toISOString() }))
+  utimesSync(stateFile, now, new Date(now.getTime() + 2000))
+}
 
 // The YAML parser belongs to the DSH installation, not to this dependency-free
 // package, and ESM `import('yaml')` cannot resolve from a throwaway verify
@@ -293,7 +315,7 @@ assert.deepEqual(
 good.mountTools()
 assert.deepEqual(
   good.tools.map((tool) => tool.name).sort(),
-  ['abg_questions', 'abg_report_issue', 'abg_status', 'record_orientation', 'record_question'],
+  ['abg_questions', 'abg_status', 'record_orientation', 'record_question'],
 )
 // Positive proof: the shipped config must ACTIVATE, not merely not throw. An
 // inert fault surface would leave `mounted: false` and a populated `degraded`.
@@ -302,6 +324,24 @@ assert.ok(goodStatus, 'the shipped config must register the read-only status too
 const goodReport = await goodStatus.execute({}, {})
 assert.equal(goodReport.mount.mounted, true, 'the shipped config must ACTIVATE (mounted: true)')
 assert.deepEqual(goodReport.mount.degraded ?? [], [], 'the shipped config must mount with no degraded capability')
+
+// (c) GATING: `pause` suppresses the section and `start` restores it, from the
+// control-state file alone — no reconfiguration, no reinstall.
+setControl('paused', 0)
+assert.equal(good.sections[0].text({}), '', 'a paused control state must suppress the section')
+const pausedReport = await goodStatus.execute({}, {})
+assert.equal(pausedReport.control.status, 'paused', 'the read-only surface reports the control state')
+setControl('running', 0)
+assert.match(
+  good.sections[0].text({}),
+  /Agent Behavioral Governance \(ABG\)/,
+  'start must restore the section',
+)
+// A generation bump must be the only thing that re-reads prompt.md.
+writeFileSync(path.join(process.argv[3], 'prompt.md'), '# House rules\n\n- Never write outside the workspace.')
+assert.match(good.sections[0].text({}), /Agent Behavioral Governance \(ABG\)/, 'prompt.md waits for a restart')
+setControl('running', 1)
+assert.equal(good.sections[0].text({}), '# House rules\n\n- Never write outside the workspace.')
 
 // (b) §26.2: a bad configuration does not throw and stays observable.
 const bad = stubContext()
@@ -318,11 +358,102 @@ assert.match(report.mount.configError, /unknown module id/)
 console.log('installed artifact binds the plugin and degrades a bad config observably')
 JS
 
-if node "$PROBE" "$INSTALLED_MODULE" >"${VERIFY_ROOT}/probe.out" 2>&1; then
-  pass "installed artifact binds one section, three listeners, five tools; bad config stays observable"
+CONTROL_DIR="${VERIFY_ROOT}/control"
+rm -rf "$CONTROL_DIR"
+mkdir -p "$CONTROL_DIR"
+if node "$PROBE" "$INSTALLED_MODULE" "$CONTROL_DIR" >"${VERIFY_ROOT}/probe.out" 2>&1; then
+  pass "installed artifact binds one section, three listeners, four tools; control gating and a bad config stay observable"
 else
   fail "installed-artifact execution proof failed"
   sed -n '1,25p' "${VERIFY_ROOT}/probe.out"
+fi
+
+# ── 5b. the `abg` CLI smoke check (isolated --state) ─────────────────────────
+# The terminal interface is the 0.6.0 replacement for the Web GUI. Its state
+# machine is exercised here against a throwaway state file, so the check cannot
+# touch any real profile's control record.
+step "abg CLI smoke (isolated --state)"
+ABG_CLI="${PLUGIN_DIR}/bin/abg"
+CLI_DIR="${VERIFY_ROOT}/cli"
+CLI_STATE="${CLI_DIR}/state.json"
+rm -rf "$CLI_DIR"
+mkdir -p "$CLI_DIR"
+CLI=("$NODE_BIN" "$ABG_CLI")
+
+if "${CLI[@]}" --help >/dev/null 2>&1 && [ "$("${CLI[@]}" --version 2>/dev/null)" = "0.6.0" ]; then
+  pass "abg --help and --version (0.6.0)"
+else
+  fail "abg --help / --version"
+fi
+if "${CLI[@]}" --state "$CLI_STATE" status >"${CLI_DIR}/status.log" 2>&1 &&
+   grep -q '^control      running (no state file: default)' "${CLI_DIR}/status.log"; then
+  pass "abg status reports the absent-state default (running)"
+else
+  fail "abg status"; sed -n '1,20p' "${CLI_DIR}/status.log"
+fi
+if "${CLI[@]}" --state "$CLI_STATE" pause >/dev/null 2>&1 && grep -q '"status": "paused"' "$CLI_STATE"; then
+  pass "abg pause writes status=paused"
+else
+  fail "abg pause"
+fi
+if "${CLI[@]}" --state "$CLI_STATE" start >/dev/null 2>&1 && grep -q '"status": "running"' "$CLI_STATE"; then
+  pass "abg start returns to running"
+else
+  fail "abg start"
+fi
+if "${CLI[@]}" --state "$CLI_STATE" restart >/dev/null 2>&1 && grep -q '"generation": 1' "$CLI_STATE"; then
+  pass "abg restart bumps generation"
+else
+  fail "abg restart"
+fi
+if "${CLI[@]}" --state "$CLI_STATE" exit >/dev/null 2>&1 && grep -q '"status": "stopped"' "$CLI_STATE"; then
+  pass "abg exit stops governance without uninstalling"
+else
+  fail "abg exit"
+fi
+
+# ── 5c. the prompt.md round-trip through $EDITOR ─────────────────────────────
+step "abg prompt round-trip (edit validates; a refusal is refused)"
+PROMPT_DIR="${VERIFY_ROOT}/prompt-cli"
+PROMPT_STATE="${PROMPT_DIR}/state.json"
+rm -rf "$PROMPT_DIR"
+mkdir -p "$PROMPT_DIR"
+REFUSE_EDITOR="${PROMPT_DIR}/editor-refuse.sh"
+OK_EDITOR="${PROMPT_DIR}/editor-ok.sh"
+cat >"$REFUSE_EDITOR" <<'SH'
+#!/bin/sh
+printf '%s' 'Report {{objective}} each turn.' > "$1"
+SH
+cat >"$OK_EDITOR" <<'SH'
+#!/bin/sh
+printf '%s' '# House rules' > "$1"
+SH
+chmod +x "$REFUSE_EDITOR" "$OK_EDITOR"
+
+if EDITOR="$REFUSE_EDITOR" "${CLI[@]}" --state "$PROMPT_STATE" prompt edit >"${PROMPT_DIR}/refuse.log" 2>&1; then
+  fail "prompt edit accepted a refused text"
+elif grep -q 'interpolation' "${PROMPT_DIR}/refuse.log" && [ ! -f "${PROMPT_DIR}/prompt.md" ]; then
+  pass "prompt edit refuses {{ }} with its reasons and keeps the previous text"
+else
+  fail "prompt edit refusal"; sed -n '1,20p' "${PROMPT_DIR}/refuse.log"
+fi
+if EDITOR="$OK_EDITOR" "${CLI[@]}" --state "$PROMPT_STATE" prompt edit >"${PROMPT_DIR}/ok.log" 2>&1 &&
+   [ -f "${PROMPT_DIR}/prompt.md" ]; then
+  pass "prompt edit validates and stores prompt.md"
+else
+  fail "prompt edit success"; sed -n '1,20p' "${PROMPT_DIR}/ok.log"
+fi
+if "${CLI[@]}" --state "$PROMPT_STATE" prompt >"${PROMPT_DIR}/print.log" 2>&1 &&
+   grep -q '^# House rules$' "${PROMPT_DIR}/print.log" &&
+   grep -q 'version 0.2.0+user:' "${PROMPT_DIR}/print.log"; then
+  pass "prompt prints the effective text, its version and byte count"
+else
+  fail "prompt print"; sed -n '1,20p' "${PROMPT_DIR}/print.log"
+fi
+if "${CLI[@]}" --state "$PROMPT_STATE" prompt reset >/dev/null 2>&1 && [ ! -f "${PROMPT_DIR}/prompt.md" ]; then
+  pass "prompt reset returns to the compiled default"
+else
+  fail "prompt reset"
 fi
 
 # The host must still boot the real composition carrying the bad overlay: with the

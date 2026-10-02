@@ -16,18 +16,24 @@
  * in any composition and immune to the profile's module-resolution layout.
  */
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 import { resolveConfig, DEFAULT_SECTION_ORDER } from './kernel/config.js'
 import { createRegistry } from './kernel/registry.js'
 // `lib/generated/**` is the compiled JavaScript of `src/**/*.ts` (see
-// TYPESCRIPT-MIGRATION.md). These three modules are migrated; the rest of `lib/`
+// TYPESCRIPT-MIGRATION.md). These modules are migrated; the rest of `lib/`
 // is still hand-written JavaScript.
-import { compilePrompt, promptStats, utf8Bytes } from './generated/kernel/prompt-compiler.js'
-import { composePromptOverride } from './generated/kernel/prompt-override.js'
+import { compilePrompt, promptStats } from './generated/kernel/prompt-compiler.js'
 import { createDiagnosticsExporter } from './generated/kernel/export.js'
-import { MAX_REQUEST_BYTES, planPromptEdit, promptEditorState, submitFeedback } from './kernel/gui-actions.js'
+// The 0.6.0 control plane: the durable `abg start|pause|exit` record and the
+// `prompt.md` store beside it. The CLI writes them; this host layer reads them.
+import {
+  readControlStateFile,
+  resolveControlPaths,
+  transitionDiagnostic,
+} from './generated/kernel/control.js'
+import { readPromptFile, resolveEffectivePrompt } from './generated/kernel/prompt-store.js'
 import { projectGovernanceModule, createProjectState, evaluateOrientationGate } from './modules/project-governance.js'
 import { informationIntegrityModule } from './modules/information-integrity.js'
 import { userAttentionModule, createQuestionCollector } from './modules/user-attention.js'
@@ -50,7 +56,6 @@ import {
   recordSubmittedBatch,
 } from './kernel/questions.js'
 import { createDiagnostics } from './kernel/diagnostics.js'
-import { FEEDBACK_TOOL_NAME, feedbackToolDefinition } from './kernel/feedback.js'
 import { createCompatibilityAdapter, DEFAULT_BASELINE } from './kernel/compatibility.js'
 import { createGovernanceState, agentIdOf } from './kernel/state.js'
 import { createDurableStore, sessionIdOf } from './kernel/durability.js'
@@ -75,19 +80,6 @@ export const STATUS_CONTEXT_NAME = 'abg:status'
 export const STATUS_TOOL_NAME = 'abg_status'
 
 /**
- * The read-only JSON route the Web GUI panel reads (the same payload as
- * `abg_status` and the diagnostics mirror). Registered on the deployment's own
- * web server under the browser-trust fence, and only when one is mounted.
- */
-export const STATUS_ROUTE_PATH = '/api/abg/status'
-
-/** The prompt-editor write route (POST `{ text }`). Enabled only for `prompt.mode: replace`. */
-export const PROMPT_ROUTE_PATH = '/api/abg/prompt'
-
-/** The feedback-form write route (POST `{ summary, expected, actual, file? }`). */
-export const FEEDBACK_ROUTE_PATH = '/api/abg/feedback'
-
-/**
  * Version of the compiled governance prompt. It changes whenever the injected
  * model-facing text changes, so a behavioural regression is attributable to one
  * prompt revision (ARCHITECTURE-SPEC Part B §22.3, PRODUCT-SPEC PR-07).
@@ -96,10 +88,10 @@ export const PROMPT_VERSION = '0.2.0'
 
 /**
  * Version of the plugin package, kept in step with `package.json` `version`.
- * Declared here so a feedback report can name the build it came from without the
- * plugin reading the filesystem at runtime.
+ * Declared here so the `abg` CLI can name the build without reading the
+ * filesystem at runtime.
  */
-export const PLUGIN_VERSION = '0.5.1'
+export const PLUGIN_VERSION = '0.6.0'
 
 /**
  * Stable kernel invariants: the statements that hold regardless of which modules
@@ -143,8 +135,12 @@ export const MODULES = Object.freeze([
  * compiled prompt section. Pure — no Cordis context required — so it is directly
  * unit-testable.
  *
+ * Precedence is the prompt store's, not this function's: a control-plane
+ * `prompt.md` read by the caller (`controlText`) outranks the config layer, which
+ * outranks the compiled default. The caller does the I/O; this stays pure.
+ *
  * @param {unknown} [raw]
- * @param {{ overrideText?: string }} [options] - replacement text for `prompt.mode: replace`.
+ * @param {{ overrideText?: string, controlText?: string, controlPath?: string }} [options]
  * @returns {{
  *   config: AbgConfig,
  *   registry: ReturnType<typeof createRegistry>,
@@ -153,7 +149,9 @@ export const MODULES = Object.freeze([
  *   stats: { bytes: number, characters: number, lines: number },
  *   promptIssues: string[],
  *   promptOverridden: boolean,
+ *   promptSource: string,
  *   promptUnchecked: string[],
+
  *   promptVersion: string,
  *   compiledBytes: number,
  *   compiledPrompt: string,
@@ -167,29 +165,43 @@ export function buildGovernance(raw, options = {}) {
 
   const enabled = registry.getEnabledModules()
   const basePrompt = config.enabled ? compilePrompt({ kernelPrinciples: KERNEL_PRINCIPLES, modules: enabled }) : ''
-  const composed = config.enabled
-    ? composePromptOverride({
+  const effective = config.enabled
+    ? resolveEffectivePrompt({
         mode: config.prompt.mode,
         append: config.prompt.append,
-        overrideText: options.overrideText,
+        configText: options.overrideText,
+        controlText: options.controlText,
+        controlPath: options.controlPath,
         basePrompt,
         allowOverBudget: config.prompt.allowOverBudget,
       })
-    : { text: '', applied: false, versionSuffix: '', issues: [], unchecked: [] }
+    : {
+        text: '',
+        applied: false,
+        source: 'compiled',
+        versionSuffix: '',
+        issues: [],
+        unchecked: [],
+        bytes: 0,
+        controlPath: '',
+        controlRefused: false,
+      }
 
   return {
     config,
     registry,
     enabled,
-    prompt: composed.text,
-    stats: promptStats(composed.text),
+    prompt: effective.text,
+    stats: promptStats(effective.text),
     /** Why a user prompt edit was refused or ignored; surfaced as diagnostics on mount. */
-    promptIssues: composed.issues,
-    promptOverridden: composed.applied,
+    promptIssues: effective.issues,
+    promptOverridden: effective.applied,
+    /** `control` | `config-file` | `config-append` | `compiled`. */
+    promptSource: effective.source,
     /** Soft invariants that no longer apply once the text is user-authored. */
-    promptUnchecked: composed.unchecked,
+    promptUnchecked: effective.unchecked,
     /** `PROMPT_VERSION`, suffixed when a user edit is in force, so one text is one version. */
-    promptVersion: `${PROMPT_VERSION}${composed.versionSuffix}`,
+    promptVersion: `${PROMPT_VERSION}${effective.versionSuffix}`,
     /** Bytes of the audited compiled default, for a diff in any front end. */
     compiledBytes: promptStats(basePrompt).bytes,
     /** The audited compiled text, which every override is validated against. */
@@ -303,29 +315,17 @@ function readPromptOverride(rawConfig) {
 }
 
 /**
- * Persist a prompt override so the panel's "applied" means durable.
- *
- * Written to a temporary sibling and renamed, so a reader (the next process
- * start, or an editor) never observes a half-written prompt.
- *
- * @param {string} path
- * @param {string} text
- * @returns {void}
- */
-function writeTextFile(path, text) {
-  const temporary = `${path}.tmp`
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(temporary, text)
-  renameSync(temporary, path)
-}
-
-/**
  * Mount ABG.
  *
  * Contract (`ARCHITECTURE-SPEC` §26.2): **this function does not throw.**
  * Configuration faults degrade to a diagnostic, and each capability is
  * registered inside its own guarded step, so one failing seam cannot cost the
  * deployment the rest of the governance layer.
+ *
+ * 0.6.0 adds a second, independent input: the control plane. `abg start|pause|
+ * exit` writes a small state file that this function re-reads (cached by mtime),
+ * and `abg restart` bumps its `generation`, which invalidates the cached
+ * configuration and prompt so the next step re-reads from disk.
  *
  * @param {AbgContext} ctx
  * @param {unknown} [rawConfig]
@@ -335,10 +335,18 @@ export function apply(ctx, rawConfig) {
   /** @type {ReturnType<typeof buildGovernance>} */
   let kernel
   let overrideIssue = ''
+  let controlFileIssue = ''
+  const controlPaths = resolveControlPaths({ env: process.env })
   try {
     const override = readPromptOverride(rawConfig)
     if (override.issue !== undefined) overrideIssue = override.issue
-    kernel = buildGovernance(rawConfig, { overrideText: override.text })
+    const controlPrompt = readPromptFile(controlPaths.promptFile)
+    if (controlPrompt.issue !== undefined) controlFileIssue = controlPrompt.issue
+    kernel = buildGovernance(rawConfig, {
+      overrideText: override.text,
+      controlText: controlPrompt.text,
+      controlPath: controlPaths.promptFile,
+    })
   } catch (error) {
     mountConfigFaultSurface(ctx, error)
     return
@@ -407,9 +415,10 @@ export function apply(ctx, rawConfig) {
   })
 
   /**
-   * The live prompt facts. The GUI editor mutates these, and the section text
-   * provider, the status route and the feedback report all read them, so an edit
-   * applies to the next assembly without a restart.
+   * The live prompt facts. `abg prompt edit` / `abg prompt reset` change the
+   * on-disk `prompt.md`, and `abg restart` (a `generation` bump) is what rebuilds
+   * these; the section text provider and the read-only `abg_status` tool read
+   * them, so a reload applies to the next assembly without a remount.
    */
   const promptState = {
     text: prompt,
@@ -481,6 +490,160 @@ export function apply(ctx, rawConfig) {
     degradedCapabilities.push(capability)
     note('abg.capability_missing', { capability }, `abg: capability_missing ${capability}`, 'warn')
   }
+
+  /* ── control plane: start | pause | exit (0.6.0) ──────────────────────── */
+
+  // The control record is a second, independent input beside the mount config.
+  // It is re-read cheaply: a re-stat per assembly and per step is allowed, and
+  // only a changed mtime costs a read. `abg restart` bumps `generation`, which is
+  // the signal to invalidate the cached configuration and prompt so the next step
+  // sees on-disk truth.
+  const control = {
+    // Distinguishes "never read" from "read and still absent". An absent file
+    // also yields the default cache key, so an uninitialised cache must not be
+    // treated as an unchanged one: the first read is what establishes the
+    // previous state a transition (and a generation change) is measured against.
+    initialised: false,
+    mtimeKey: '-Infinity:0',
+    /** @type {'running' | 'paused' | 'stopped' | undefined} */
+    status: undefined,
+    generation: 0,
+    unreadable: false,
+  }
+
+  /**
+   * The control file's cache key: mtime **and** size.
+   *
+   * The mtime alone is what the contract asks for, but two writes inside the same
+   * clock millisecond share an mtime on coarse clocks. Adding the byte size is
+   * free (same `stat`) and closes that window for any transition that changes the
+   * record's length — every `status` change does.
+   */
+  const controlMtime = () => {
+    try {
+      const info = statSync(controlPaths.stateFile)
+      return `${info.mtimeMs}:${info.size}`
+    } catch {
+      return '-Infinity:0'
+    }
+  }
+
+  /**
+   * Rebuild the kernel after a generation change, re-reading every on-disk
+   * input: the config-supplied prompt file and the control-plane `prompt.md`.
+   *
+   * @returns {void}
+   */
+  const rebuildKernel = () => {
+    const override = readPromptOverride(rawConfig)
+    overrideIssue = override.issue ?? ''
+    const controlPrompt = readPromptFile(controlPaths.promptFile)
+    controlFileIssue = controlPrompt.issue ?? ''
+    kernel = buildGovernance(rawConfig, {
+      overrideText: override.text,
+      controlText: controlPrompt.text,
+      controlPath: controlPaths.promptFile,
+    })
+    promptState.text = kernel.prompt
+    promptState.bytes = kernel.stats.bytes
+    promptState.overridden = kernel.promptOverridden
+    promptState.version = kernel.promptVersion
+    promptState.issues = [...kernel.promptIssues]
+    promptState.unchecked = [...kernel.promptUnchecked]
+    mount.promptVersion = kernel.promptVersion
+    mount.promptOverridden = kernel.promptOverridden
+    mount.promptIssues = kernel.promptIssues
+    mount.promptBytes = kernel.stats.bytes
+    mount.compiledPromptBytes = kernel.compiledBytes
+  }
+
+  /**
+   * Read the control record when it changed, classify the transition, and apply
+   * a generation change. Always returns a usable status; never throws.
+   *
+   * @returns {'running' | 'paused' | 'stopped'}
+   */
+  const refreshControl = () => {
+    const mtimeKey = controlMtime()
+    if (control.initialised && mtimeKey === control.mtimeKey) return control.status ?? 'running'
+    control.initialised = true
+    /** @type {import('./generated/kernel/control.js').AbgControlReadResult} */
+    let read
+    try {
+      read = readControlStateFile(controlPaths.stateFile)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      read = { state: { schema: 1, status: 'running', generation: control.generation, updatedAt: '' }, present: false, issue: message }
+    }
+    const previous = control.status
+    control.mtimeKey = mtimeKey
+    control.status = read.state.status
+
+    const issue = read.issue ?? ''
+    if (issue !== '' && !control.unreadable) {
+      control.unreadable = true
+      note(
+        'abg.control_state_unreadable',
+        { file: controlPaths.stateFile, issue },
+        `abg: control_state_unreadable ${issue}`,
+        'warn',
+      )
+    } else if (issue === '') {
+      control.unreadable = false
+    }
+
+    const transition = transitionDiagnostic(previous, read.state.status)
+    if (transition !== undefined) {
+      note(
+        transition,
+        { status: read.state.status, generation: read.state.generation, file: controlPaths.stateFile },
+        `abg: ${transition.slice('abg.'.length)} status=${read.state.status}`,
+      )
+    }
+
+    if (previous !== undefined && read.state.generation !== control.generation) {
+      const from = control.generation
+      control.generation = read.state.generation
+      note(
+        'abg.control_generation_changed',
+        { from, to: read.state.generation },
+        `abg: control_generation_changed ${from}->${read.state.generation}`,
+      )
+      try {
+        rebuildKernel()
+      } catch (error) {
+        note(
+          'abg.error',
+          { capability: 'control.reload', message: error instanceof Error ? error.message : String(error) },
+          `abg: control.reload failed: ${error instanceof Error ? error.message : String(error)}`,
+          'warn',
+        )
+      }
+    } else {
+      control.generation = read.state.generation
+    }
+    return read.state.status
+  }
+
+  if (controlFileIssue !== '') {
+    note('abg.prompt_override_missing', { issue: controlFileIssue }, `abg: prompt_override_missing ${controlFileIssue}`, 'warn')
+  }
+
+  // Observe the control plane once at mount, so a `stopped` profile behaves as if
+  // governance were switched off and a `paused` profile records its transition.
+  const initialControl = refreshControl()
+  if (initialControl === 'stopped') {
+    // `exit` means "off for this profile", and the installation is untouched.
+    try {
+      ctx.logger?.info('abg: governance stopped by control state')
+    } catch {
+      // Best-effort narration only.
+    }
+    return
+  }
+
+  /** Governance is live only in `running`. `paused` and `stopped` pass through. */
+  const controlIsActive = () => refreshControl() === 'running'
 
   /* ── user-editable prompt (§27.1) ─────────────────────────────────────── */
 
@@ -648,8 +811,9 @@ export function apply(ctx, rawConfig) {
         order: config.sectionOrder,
         interpolate: false,
         // A function-valued provider is re-evaluated per assembly, which is what
-        // lets a GUI edit take effect on the next step.
-        text: () => promptState.text,
+        // lets a `prompt.md` edit or an `abg restart` take effect on the next step.
+        // `pause`/`exit` suppress the section entirely: it contributes no text.
+        text: () => (controlIsActive() ? promptState.text : ''),
       })
     })
 
@@ -677,6 +841,9 @@ export function apply(ctx, rawConfig) {
    * @returns {Promise<AbgPreStepDecision>}
    */
   const onPreStep = async (payload, next) => {
+    // Control plane first: `paused`/`stopped` let the step through untouched,
+    // before any ABG bookkeeping.
+    if (!controlIsActive()) return next()
     // The step's own agent decides which orientation is evaluated.
     const agent = payload?.agent
     const { orientation } = governance.forAgent(agent)
@@ -711,6 +878,9 @@ export function apply(ctx, rawConfig) {
    * @returns {Promise<AbgPreToolDecision>}
    */
   const onPreExecute = async (exec, next) => {
+    // Control plane first: `paused`/`stopped` pass the call straight through, so
+    // a paused profile neither gates nor observes a mutation.
+    if (!controlIsActive()) return next()
     // Every decision below is taken against the calling agent's own ledgers.
     const agent = exec?.agent
     const { orientation, questions } = governance.forAgent(agent)
@@ -879,6 +1049,13 @@ export function apply(ctx, rawConfig) {
         output: { schema: { type: 'object' }, render: () => [] },
         execute: async (_args, exec) => ({
           mount,
+          control: {
+            status: refreshControl(),
+            generation: control.generation,
+            stateFile: controlPaths.stateFile,
+            promptFile: controlPaths.promptFile,
+            promptSource: kernel.promptSource,
+          },
           compatibility: mount.compatibility,
           agentId: agentIdOf(/** @type {any} */ (exec ?? {}).agent),
           status_line: diagnostics.formatLine(),
@@ -893,23 +1070,6 @@ export function apply(ctx, rawConfig) {
         questionsToolDefinition((exec) => governance.forAgent(/** @type {any} */ (exec ?? {}).agent).questions),
       )
     })
-    // Optional feedback channel (§28.6). Off only when a deployment says so: in
-    // `url` mode it composes a prefilled issue link locally and makes no network
-    // call, so the tester can file a redacted report in one step.
-    if (config.feedback.enabled) {
-      guarded(`tools.${FEEDBACK_TOOL_NAME}`, () => {
-        toolCtx.tools?.register(
-          feedbackToolDefinition({
-            config: config.feedback,
-            mount,
-            diagnostics,
-            pluginVersion: PLUGIN_VERSION,
-            promptVersion: kernel.promptVersion,
-          }),
-        )
-      })
-    }
-
     /**
      * @param {AbgToolExecution} execution
      * @returns {string | undefined}
@@ -924,200 +1084,7 @@ export function apply(ctx, rawConfig) {
     // to record, not a quiet no-op.
     noteMissing('tools')
   } else {
-    /* ── Web GUI routes (§28.8) ───────────────────────────────────────────── */
-
-  // One read route (the same JSON shape as `abg_status` and the on-disk mirror)
-  // and two write routes: the prompt editor and the feedback form. All three sit
-  // under `/api`, behind the deployment's browser-trust fence, and are registered
-  // in one guarded step. A headless composition has no such seam, which is an
-  // optional capability and not a degradation — but the reason is recorded
-  // in-band, because an `inject` that never fires leaves no trace at all.
-  if (config.gui.enabled) {
-    ctx.inject?.(['webServer'], (webCtx) => {
-      const webServer = webCtx.webServer
-      if (webServer === undefined) {
-        noteMissing('webServer')
-        return
-      }
-
-      /** The live mount view: prompt facts change when the editor writes. */
-      const mountView = () => ({
-        ...mount,
-        promptBytes: promptState.bytes,
-        promptVersion: promptState.version,
-        promptOverridden: promptState.overridden,
-        promptIssues: promptState.issues,
-        compiledPromptBytes: kernel.compiledBytes,
-      })
-
-      /**
-       * @param {AbgWebResponse} res
-       * @param {number} status
-       * @param {unknown} body
-       */
-      const sendJson = (res, status, body) => {
-        // The route handler owns the response lifecycle: a client that already
-        // went away must not turn into an unhandled exception in the host.
-        try {
-          res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
-          res.end(`${JSON.stringify(body)}\n`)
-        } catch {
-          /* the response is already gone */
-        }
-      }
-
-      /** Collect a bounded request body. Never leaves the request unread. */
-      /**
-       * @param {AbgWebRequest} req
-       * @returns {Promise<string>}
-       */
-      const readBody = async (req) => {
-        /** @type {{ length: number }[]} */
-        const chunks = []
-        let size = 0
-        await new Promise((resolve, reject) => {
-          req.on('data', (chunk) => {
-            size += chunk.length
-            if (size > MAX_REQUEST_BYTES) {
-              reject(new Error(`request body exceeds ${MAX_REQUEST_BYTES} bytes`))
-              req.destroy?.()
-              return
-            }
-            chunks.push(chunk)
-          })
-          req.on('end', () => resolve(undefined))
-          req.on('error', reject)
-        })
-        return Buffer.concat(chunks).toString('utf8')
-      }
-
-      /**
-       * @param {AbgWebRequest} req
-       * @returns {Promise<Record<string, unknown>>}
-       */
-      const jsonRequest = async (req) => {
-        const raw = await readBody(req)
-        if (raw.trim() === '') return {}
-        return JSON.parse(raw)
-      }
-
-      guarded('webserver.routes', () => {
-        /** @type {Array<() => void>} */
-        const disposers = []
-        /**
-         * @param {string} path
-         * @param {(req: AbgWebRequest, res: AbgWebResponse) => void} handler
-         */
-        const route = (path, handler) => {
-          const dispose = webServer.register({ kind: 'exact', path, handler })
-          if (typeof dispose === 'function') disposers.push(dispose)
-          note('abg.gui_route_registered', { path, kind: 'exact' }, `abg: gui_route_registered path=${path}`)
-        }
-
-        // 1. Read: governance state, the prompt editor's view, and feedback mode.
-        route(STATUS_ROUTE_PATH, (_req, res) => {
-          sendJson(res, 200, {
-            schema: 1,
-            generatedAt: new Date().toISOString(),
-            mount: mountView(),
-            status_line: diagnostics.formatLine(),
-            counts: diagnostics.counts(),
-            diagnostics: diagnostics.recent(50),
-            prompt: promptEditorState({ config, state: promptState }),
-            feedback: {
-              mode: config.feedback.mode,
-              enabled: config.feedback.enabled,
-              repository: config.feedback.repository,
-              token_env_var: config.feedback.tokenEnvVar,
-              can_file: config.feedback.mode === 'api',
-            },
-          })
-        })
-
-        // 2. Write: the prompt editor. Refusals are the same rules the file and
-        //    the config obey, because they are the same kernel.
-        route(PROMPT_ROUTE_PATH, (req, res) => {
-          void (async () => {
-            try {
-              if (req.method !== 'POST') {
-                sendJson(res, 405, { error: 'use POST' })
-                return
-              }
-              const payload = await jsonRequest(req)
-              const plan = planPromptEdit({ config, basePrompt: kernel.compiledPrompt, text: payload.text })
-              if (plan.status !== 200 || plan.composed === undefined) {
-                sendJson(res, plan.status, plan.body)
-                note(
-                  'abg.prompt_override_rejected',
-                  { source: 'gui', status: plan.status, issues: plan.body.issues ?? plan.body.error },
-                  `abg: prompt_override_rejected source=gui status=${plan.status}`,
-                  'warn',
-                )
-                return
-              }
-
-              // Persist first, then adopt: a panel that reports success must be
-              // reporting a durable fact, not an in-memory one.
-              writeTextFile(config.prompt.file, plan.composed.text)
-              promptState.text = plan.composed.text
-              promptState.bytes = utf8Bytes(plan.composed.text)
-              promptState.overridden = true
-              promptState.version = `${PROMPT_VERSION}${plan.composed.versionSuffix}`
-              promptState.issues = plan.composed.issues
-              promptState.unchecked = plan.composed.unchecked
-              note(
-                'abg.prompt_override_applied',
-                {
-                  source: 'gui',
-                  promptVersion: promptState.version,
-                  bytes: promptState.bytes,
-                  unchecked: promptState.unchecked,
-                },
-                `abg: prompt_override_applied source=gui version=${promptState.version} bytes=${promptState.bytes}`,
-                'warn',
-              )
-              sendJson(res, 200, { applied: true, ...promptEditorState({ config, state: promptState }) })
-            } catch (error) {
-              sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
-            }
-          })()
-        })
-
-        // 3. Write: the feedback form. Composition stays in the kernel, so the
-        //    redaction tests cover the browser path too.
-        route(FEEDBACK_ROUTE_PATH, (req, res) => {
-          void (async () => {
-            try {
-              if (req.method !== 'POST') {
-                sendJson(res, 405, { error: 'use POST' })
-                return
-              }
-              const payload = await jsonRequest(req)
-              const result = await submitFeedback({
-                config: config.feedback,
-                mount: mountView(),
-                diagnostics,
-                pluginVersion: PLUGIN_VERSION,
-                promptVersion: promptState.version,
-                payload,
-              })
-              sendJson(res, result.status, result.body)
-            } catch (error) {
-              sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
-            }
-          })()
-        })
-
-        if (disposers.length > 0) {
-          ctx.effect?.(() => () => {
-            for (const dispose of disposers) dispose()
-          }, 'abg: remove the GUI routes')
-        }
-      })
-    })
-  }
-
-  guarded('tools', () => {
+    guarded('tools', () => {
       ctx.inject?.(['tools'], attachTools)
     })
   }

@@ -51,9 +51,10 @@ node eval/e2e-analyze.mjs              # derives ordering from tool/call events
 
 ## 3. Verified state (single source of truth for status and numbers)
 
-**Mechanisms — 265 tests (all pass, no todo, no skip) and 12/12 verification checks
-(derived 2026-10-02 from the current tree); 238 tests at the v0.2.0 structural
-round; 159 tests at the `0.1.0` record below.** Re-derive with `npm test` and
+**Mechanisms — 284 tests (all pass, no todo, no skip) and 22/22 verification checks
+(derived 2026-10-03 from the current tree); 265 tests at the 0.5.x structural
+round; 238 tests at the v0.2.0 structural round; 159 tests at the `0.1.0` record
+below.** Re-derive with `npm test` and
 `plugin/scripts/verify.sh`; the counts move with each round, and this is the only
 place they are stated. Integration tests
 mount the real `dsh-system-prompt`, `dsh-tools`, `dsh-fs-local`, and the
@@ -85,7 +86,7 @@ and logger narration is best-effort. This is covered by four tests in
 
 ## 4. Not verified — the blockers
 
-Status as of the v0.5.0 GUI round (2026-10-02). A blocker marked **closed** keeps
+Status as of the 0.6.0 control-plane round (2026-10-03). A blocker marked **closed** keeps
 its entry so the record of what was wrong survives; the mechanism and its test are
 named.
 
@@ -162,14 +163,17 @@ The authoritative key/value documentation is
 
 ```text
 enabled  sectionOrder  modules  workspace  preStep  userAttention
-feedback  prompt  gui  diagnostics  diagnosticsExport
+prompt  diagnostics  diagnosticsExport
 ```
 
 Defaults a maintainer must not change silently: `workspace.policy: ask`,
 `workspace.overlapCheck: ask`, `preStep.orientationGate: off`,
 `preStep.requireBeforeMutation: false`, `diagnostics: true`, and
-`feedback.enabled: true` in inert `url` mode. Non-intrusive defaults are the
-documented decision (§34.2 Q1); strict enforcement is an explicit opt-in.
+`prompt.mode: compiled`. Non-intrusive defaults are the
+documented decision (§34.2 Q1); strict enforcement is an explicit opt-in. The
+control plane (`abg start|pause|restart|exit`) is a separate input, not config:
+its record lives at `$ABG_STATE_FILE` (else `<state-dir>/abg/state.json`) and the
+sibling `prompt.md` outranks the whole `prompt` block.
 
 ## 7. Environment and process gotchas
 
@@ -184,20 +188,22 @@ These each cost real time. Do not rediscover them.
   `TESTING.md` documented the wrong form; §28.6-era docs were corrected, and
   `scripts/check-install.sh` now checks the install end to end.
 - **The plugin list shows the profile you are *running*, not the one you installed
-  into.** Installing into `abg-test` while the GUI runs `web` looks exactly like a
+  into.** Installing into `abg-test` while the harness runs `web` looks exactly like a
   failed install and is the second defect the first volunteer reported. The
   package, the manifest reference, and the composed `abg` row are all per profile;
   `scripts/check-install.sh <profile>` reports which of the three states you are
   in, and `dsh --profile <name> --dump-config` needs **write** access to that
   profile directory (it materialises a temporary `cordis.yml`), so a sandboxed or
   read-only `DSH_HOME` yields "unverified" rather than a false negative.
-- **The Web GUI panel exists only in a Web-profile run.** A profile created from
-  the `headless` template mounts no web server or client substrate, so no panel
-  can attach there regardless of install success. To see the panel, install ABG
-  into the profile actually run as a Web app and start that profile. If ABG fails
-  to configure it mounts nothing and the panel reports "ABG status is unavailable",
-  with the cause recorded as the `abg.config_invalid` diagnostic;
-  `scripts/check-install.sh <profile>` distinguishes that from a profile mismatch.
+- **The interface is `abg`, not a Web panel.** ABG 0.6.0 removed the browser
+  route; a profile created from the `headless` template has no web substrate, so
+  there is nothing to attach a panel to regardless of install success. Inspect
+  governance with `abg status` (control state, `PROMPT_VERSION`, compose state) and
+  switch it with `abg pause` / `abg start` / `abg exit`. If ABG fails to configure
+  it mounts nothing, and `abg status` plus `dsh --profile <name> --dump-config |
+  grep -A4 'id: abg'` is how that is distinguished from a profile mismatch;
+  `scripts/check-install.sh <profile>` reports which of the three states you are
+  in.
 - **An installed profile links the plugin at install time.** Re-running validation
   after a source change silently exercises the *old* code. This produced a
   misleading result once. `eval/e2e.mjs` now re-installs before running; do the
@@ -307,7 +313,7 @@ changes with each run — measure it with `du -sh .` instead of trusting a numbe
 ├── ARCHITECTURE-SPEC-AGENT-REFERENCE.md  architecture; §17 seams, §18 deltas, §32 gates
 ├── IMPLEMENTATION-VALIDATION-HANDOFF.md  retired pointer to §32 and the build order
 ├── MAINTENANCE-HANDOFF.md                this file — current status and numbers
-├── TESTING.md                            volunteer install, trial, and feedback
+├── TESTING.md                            volunteer install, trial, and deviation reporting
 ├── SECURITY.md                           boundaries, known limitations, reporting
 ├── CONTRIBUTING.md                       process contract and the checks to run
 ├── CODE_OF_CONDUCT.md                    Contributor Covenant 2.1

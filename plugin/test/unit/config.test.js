@@ -92,7 +92,7 @@ test('resolveConfig rejects a non-finite section order', () => {
 // "none configured". Validating them with the non-empty-string rule made the
 // plugin reject its own shipped configuration, and because `apply()` must not
 // throw (§26.2) a default install mounted the inert fault surface: no prompt
-// section, no hooks, no tools, no GUI route, and no host warning. These tests
+// section, no hooks, no tools, and no host warning. These tests
 // pin the accepting half; the patch-file test below pins the file that broke.
 // ─────────────────────────────────────────────────────────────────────────────
 

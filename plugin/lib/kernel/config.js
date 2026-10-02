@@ -37,16 +37,6 @@ export const DEFAULT_MUTATING_TOOLS = Object.freeze(['write', 'edit', 'str_repla
  */
 export const DEFAULT_SECTION_ORDER = 8500
 
-/** Where the optional feedback channel files issues by default. */
-export const DEFAULT_FEEDBACK_REPOSITORY = 'ccneedb/agent-behavioral-governance'
-
-/**
- * Environment variable read for the optional API-mode feedback channel. A token
- * is never taken from configuration and never written to disk, because
- * configuration is committed and shared.
- */
-export const DEFAULT_FEEDBACK_TOKEN_ENV = 'ABG_GITHUB_TOKEN'
-
 const TOP_LEVEL_KEYS = [
   'enabled',
   'sectionOrder',
@@ -54,25 +44,20 @@ const TOP_LEVEL_KEYS = [
   'workspace',
   'preStep',
   'userAttention',
-  'feedback',
   'prompt',
-  'gui',
   'diagnostics',
   'diagnosticsExport',
 ]
 const WORKSPACE_KEYS = ['policy', 'mutatingTools', 'protectedPaths', 'overlapCheck', 'classifyShellCommands']
 const PRESTEP_KEYS = ['orientationGate', 'requireBeforeMutation']
 const USER_ATTENTION_KEYS = ['enforceBatchCompleteness']
-const FEEDBACK_KEYS = ['enabled', 'mode', 'repository', 'tokenEnvVar', 'labels', 'includeDiagnostics']
 const PROMPT_KEYS = ['mode', 'append', 'file', 'allowOverBudget']
-const GUI_KEYS = ['enabled']
 const DIAGNOSTICS_EXPORT_KEYS = ['file', 'limit']
 const MODULE_TOGGLE_KEYS = ['enabled']
 
 const WORKSPACE_POLICIES = ['allow', 'ask', 'deny']
 const ORIENTATION_GATES = ['off', 'warn', 'reject']
 const OVERLAP_MODES = ['off', 'ask', 'deny']
-const FEEDBACK_MODES = ['url', 'api']
 const PROMPT_MODES = ['compiled', 'append', 'replace']
 
 /** Raised when a configuration value is missing, malformed, or unknown. */
@@ -108,8 +93,8 @@ function requireString(value, path) {
  * `diagnosticsExport.file` meaning "off, do no file I/O"). Validating them with
  * `requireString` made the **shipped** `cordis.patch.yml` fail this plugin's own
  * validation, so `apply()` fell into the §26.2 fault surface and the plugin
- * contributed nothing at all — no prompt section, no hooks, no tools, no GUI
- * route — while the host reported nothing. Whitespace-only values are still
+ * contributed nothing at all — no prompt section, no hooks, no tools — while the
+ * host reported nothing. Whitespace-only values are still
  * rejected: they are always a typo, never an intentional "none".
  *
  * @param {unknown} value
@@ -267,35 +252,6 @@ export function resolveConfig(raw) {
       ? true
       : requireBoolean(rawUserAttention.enforceBatchCompleteness, 'userAttention.enforceBatchCompleteness')
 
-  const rawFeedback = input.feedback === undefined ? {} : requireObject(input.feedback, 'feedback.')
-  rejectUnknownKeys(rawFeedback, FEEDBACK_KEYS, 'feedback.')
-  const feedbackMode = rawFeedback.mode === undefined ? 'url' : rawFeedback.mode
-  if (typeof feedbackMode !== 'string' || !FEEDBACK_MODES.includes(feedbackMode)) {
-    throw new AbgConfigError(`"feedback.mode" must be one of ${FEEDBACK_MODES.join(' | ')}`)
-  }
-  const feedback = Object.freeze({
-    // On by default in `url` mode: it composes an issue link locally and makes no
-    // network call, so it cannot leak or fail. `api` mode is strictly opt-in.
-    enabled: rawFeedback.enabled === undefined ? true : requireBoolean(rawFeedback.enabled, 'feedback.enabled'),
-    mode: /** @type {'url' | 'api'} */ (feedbackMode),
-    repository:
-      rawFeedback.repository === undefined
-        ? DEFAULT_FEEDBACK_REPOSITORY
-        : requireString(rawFeedback.repository, 'feedback.repository'),
-    tokenEnvVar:
-      rawFeedback.tokenEnvVar === undefined
-        ? DEFAULT_FEEDBACK_TOKEN_ENV
-        : requireString(rawFeedback.tokenEnvVar, 'feedback.tokenEnvVar'),
-    labels:
-      rawFeedback.labels === undefined
-        ? Object.freeze(['feedback'])
-        : requireStringArray(rawFeedback.labels, 'feedback.labels'),
-    includeDiagnostics:
-      rawFeedback.includeDiagnostics === undefined
-        ? true
-        : requireBoolean(rawFeedback.includeDiagnostics, 'feedback.includeDiagnostics'),
-  })
-
   const rawPrompt = input.prompt === undefined ? {} : requireObject(input.prompt, 'prompt.')
   rejectUnknownKeys(rawPrompt, PROMPT_KEYS, 'prompt.')
   const promptMode = rawPrompt.mode === undefined ? 'compiled' : rawPrompt.mode
@@ -319,12 +275,6 @@ export function resolveConfig(raw) {
       rawPrompt.allowOverBudget === undefined
         ? false
         : requireBoolean(rawPrompt.allowOverBudget, 'prompt.allowOverBudget'),
-  })
-
-  const rawGui = input.gui === undefined ? {} : requireObject(input.gui, 'gui.')
-  rejectUnknownKeys(rawGui, GUI_KEYS, 'gui.')
-  const gui = Object.freeze({
-    enabled: rawGui.enabled === undefined ? true : requireBoolean(rawGui.enabled, 'gui.enabled'),
   })
 
   const rawExport = input.diagnosticsExport === undefined ? {} : requireObject(input.diagnosticsExport, 'diagnosticsExport.')
@@ -351,9 +301,7 @@ export function resolveConfig(raw) {
       requireBeforeMutation,
     }),
     userAttention: Object.freeze({ enforceBatchCompleteness }),
-    feedback,
     prompt,
-    gui,
     diagnostics,
     diagnosticsExport,
   })

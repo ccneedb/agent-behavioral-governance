@@ -11,7 +11,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -45,8 +45,6 @@ function stubContext() {
   const logs = []
   /** @type {Array<{ action: () => (() => void) | void, label?: string }>} */
   const effects = []
-  /** @type {Array<{ kind: string, path: string, handler: (req: unknown, res: any) => unknown }>} */
-  const routes = []
 
   /** @param {string} level */
   const record = (level) => (/** @type {string} */ message) => {
@@ -86,7 +84,6 @@ function stubContext() {
     tools,
     logs,
     effects,
-    routes,
     /** Simulate the tool registry becoming available. */
     mountTools: () => {
       for (const injection of injections) {
@@ -96,21 +93,6 @@ function stubContext() {
               guard: (/** @type {any} */ guard) => guards.push(guard),
               register: (/** @type {any} */ definition) => {
                 tools.push(definition)
-                return () => {}
-              },
-            },
-          })
-        }
-      }
-    },
-    /** Simulate the web server becoming available (the Web GUI composition). */
-    mountWebserver: () => {
-      for (const injection of injections) {
-        if (injection.services.includes('webServer')) {
-          injection.callback({
-            webServer: {
-              register: (/** @type {any} */ route) => {
-                routes.push(route)
                 return () => {}
               },
             },
@@ -157,7 +139,7 @@ test('ABG requests the tool registry through ctx.inject, not eagerly', () => {
 
   assert.deepEqual(
     stub.injections.map((injection) => injection.services.join(',')).sort(),
-    ['tools', 'webServer'],
+    ['tools'],
     'every optional service is requested through ctx.inject, never read eagerly',
   )
   assert.equal(stub.guards.length, 0, 'no guard before the registry exists')
@@ -168,8 +150,8 @@ test('ABG requests the tool registry through ctx.inject, not eagerly', () => {
   assert.match(String(stub.guards[0]({ name: 'write', arguments: { file_path: '/repo/secrets/k' } })), /protected path/)
   assert.deepEqual(
     stub.tools.map((tool) => tool.name).sort(),
-    ['abg_questions', 'abg_report_issue', 'abg_status', 'record_orientation', 'record_question'],
-    'ABG registers exactly its own five tools: two capture tools and three read-only surfaces',
+    ['abg_questions', 'abg_status', 'record_orientation', 'record_question'],
+    'ABG registers exactly its own four tools: two capture tools and two read-only surfaces',
   )
 })
 
@@ -554,142 +536,166 @@ test('a full mount degrades nothing and collects its disposer', () => {
   assert.doesNotThrow(() => /** @type {() => void} */ (disposer)())
 })
 
-/* ── Web GUI routes (§28.8) ──────────────────────────────────────────────── */
+/* ── control plane: start | pause | restart | exit (0.6.0) ───────────────── */
 
 /**
- * Drive one route handler and wait for its response. The write routes return
- * before their async body has written anything, so waiting on `end` is required
- * rather than incidental.
+ * Run one case with the control plane pointed at a throwaway state file, then
+ * remove it. The plugin resolves `$ABG_STATE_FILE` per `apply()`, so setting it
+ * here is exactly how a real profile is pointed at its control record.
  *
- * @param {{ handler: (req: any, res: any) => unknown }} route
- * @param {string} method
- * @param {unknown} [body]
- * @returns {Promise<{ status: number, body: any }>}
+ * @param {(control: {
+ *   dir: string, stateFile: string, promptFile: string,
+ *   writeState: (value: unknown) => void, writePrompt: (text: string) => void,
+ * }) => Promise<void>} fn
+ * @returns {Promise<void>}
  */
-async function callRoute(route, method, body) {
-  const raw = body === undefined ? '' : JSON.stringify(body)
-  /** @type {(value?: unknown) => void} */
-  let resolveEnd = () => {}
-  const done = new Promise((resolve) => { resolveEnd = resolve })
-  let status = 0
-  let payload = ''
-  const req = {
-    method,
-    on: (/** @type {string} */ event, /** @type {(arg?: any) => void} */ listener) => {
-      if (raw !== '' && event === 'data') listener(Buffer.from(raw, 'utf8'))
-      if (event === 'end') listener()
-    },
-  }
-  const res = {
-    writeHead: (/** @type {number} */ value) => { status = value },
-    end: (/** @type {unknown} */ text) => { payload = String(text ?? ''); resolveEnd() },
-  }
-  await route.handler(req, res)
-  await done
-  return { status, body: payload === '' ? null : JSON.parse(payload) }
-}
-
-/** @param {any} stub */
-const routeOf = (stub, path) => stub.routes.find((/** @type {any} */ r) => r.path === path)
-
-test('the GUI status route serves one JSON contract and never leaves a response open', async () => {
-  const stub = stubContext()
-  abg.apply(stub.ctx, {})
-  assert.equal(stub.routes.length, 0, 'no route before the web server exists')
-  stub.mountWebserver()
-
-  assert.deepEqual(
-    stub.routes.map((r) => r.path).sort(),
-    [abg.STATUS_ROUTE_PATH, abg.PROMPT_ROUTE_PATH, abg.FEEDBACK_ROUTE_PATH].sort(),
-    'one read route and two write routes',
-  )
-  for (const r of stub.routes) assert.equal(r.kind, 'exact')
-
-  const answer = await callRoute(routeOf(stub, abg.STATUS_ROUTE_PATH), 'GET')
-  assert.equal(answer.status, 200)
-  assert.equal(answer.body.schema, 1)
-  assert.equal(answer.body.mount.mounted, true)
-  assert.equal(answer.body.mount.promptOverridden, false)
-  assert.match(answer.body.status_line, /^abg:/)
-  assert.ok(Array.isArray(answer.body.diagnostics))
-  assert.equal(answer.body.prompt.editable, false, 'default mode is `compiled`')
-  assert.equal(answer.body.feedback.can_file, false, 'url mode cannot file')
-
-  // A handler that owns the response lifecycle must not throw when it is gone.
-  const gone = {
-    writeHead: () => { throw new Error('socket closed') },
-    end: () => { throw new Error('socket closed') },
-  }
-  await assert.doesNotReject(() => Promise.resolve(routeOf(stub, abg.STATUS_ROUTE_PATH).handler({ method: 'GET' }, gone)))
-})
-
-test('the GUI routes can be switched off', () => {
-  const stub = stubContext()
-  abg.apply(stub.ctx, { gui: { enabled: false } })
-  stub.mountWebserver()
-  assert.equal(stub.routes.length, 0)
-})
-
-test('the prompt write route is read-only until the deployment opts in', async () => {
-  const stub = stubContext()
-  abg.apply(stub.ctx, {})   // default prompt.mode is `compiled`
-  stub.mountWebserver()
-  const route = routeOf(stub, abg.PROMPT_ROUTE_PATH)
-  assert.ok(route, 'the route is registered so the refusal is explainable')
-
-  const refused = await callRoute(route, 'POST', {})
-  assert.equal(refused.status, 409, 'no prompt.file means no write path')
-  assert.match(refused.body.hint, /prompt\.mode/)
-
-  assert.equal((await callRoute(route, 'GET')).status, 405)
-})
-
-test('the prompt write route validates through the same kernel and persists on success', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'abg-gui-prompt-'))
-  const file = path.join(dir, 'prompt.md')
+async function withControl(fn) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'abg-control-'))
+  const stateFile = path.join(dir, 'state.json')
+  const promptFile = path.join(dir, 'prompt.md')
+  const previous = process.env.ABG_STATE_FILE
+  process.env.ABG_STATE_FILE = stateFile
   try {
-    const stub = stubContext()
-    abg.apply(stub.ctx, { prompt: { mode: 'replace', file } })
-    stub.mountWebserver()
-    const route = routeOf(stub, abg.PROMPT_ROUTE_PATH)
-
-    const tooRisky = await callRoute(route, 'POST', { text: 'Report {{objective}} each turn.' })
-    assert.equal(tooRisky.status, 422, 'the file and the GUI share one rule')
-    assert.match(tooRisky.body.issues[0], /interpolation/)
-
-    const applied = await callRoute(route, 'POST', { text: '# House rules\n\n- Never write outside the workspace.' })
-    assert.equal(applied.status, 200)
-    assert.equal(applied.body.applied, true)
-    assert.match(applied.body.version, /^0\.2\.0\+user:/, 'the effective version names the edited text')
-    assert.equal(
-      readFileSync(file, 'utf8'),
-      '# House rules\n\n- Never write outside the workspace.',
-      'persisted before reporting success',
-    )
-
-    const view = await callRoute(routeOf(stub, abg.STATUS_ROUTE_PATH), 'GET')
-    assert.equal(view.body.mount.promptOverridden, true, 'the live view reflects the edit')
-    assert.equal(view.body.prompt.editable, true)
+    await fn({
+      dir,
+      stateFile,
+      promptFile,
+      writeState: (value) =>
+        writeFileSync(stateFile, typeof value === 'string' ? value : `${JSON.stringify(value, null, 2)}\n`),
+      writePrompt: (text) => writeFileSync(promptFile, text),
+    })
   } finally {
+    if (previous === undefined) delete process.env.ABG_STATE_FILE
+    else process.env.ABG_STATE_FILE = previous
     rmSync(dir, { recursive: true, force: true })
   }
+}
+
+const controlRecord = (/** @type {'running'|'paused'|'stopped'} */ status, /** @type {number} */ generation = 0) => ({
+  schema: 1,
+  status,
+  generation,
+  updatedAt: '2026-10-03T00:00:00.000Z',
 })
 
-test('the feedback write route composes redacted reports through the kernel', async () => {
-  const stub = stubContext()
-  abg.apply(stub.ctx, {})
-  stub.mountWebserver()
-  const route = routeOf(stub, abg.FEEDBACK_ROUTE_PATH)
-
-  assert.equal((await callRoute(route, 'POST', {})).status, 400, 'a summary is required')
-
-  const report = await callRoute(route, 'POST', { summary: 'Blocked a legitimate edit' })
-  assert.equal(report.status, 200)
-  assert.match(report.body.issue_url, /^https:\/\/github\.com\/ccneedb\/agent-behavioral-governance\/issues\/new\?/)
-  assert.match(report.body.markdown, /### What happened/)
-  assert.equal(report.body.filed, false)
-
-  // `file` is honoured only in api mode; in url mode the link is the answer.
-  const attempt = await callRoute(route, 'POST', { summary: 'x', file: true })
-  assert.match(attempt.body.file_result.reason, /url/)
+test('control: an absent state file means running, exactly as before 0.6.0', async () => {
+  await withControl(async () => {
+    const stub = stubContext()
+    abg.apply(stub.ctx, {})
+    assert.equal(stub.sections.length, 1)
+    assert.match(stub.sections[0].text({}), /Agent Behavioral Governance \(ABG\)/)
+  })
 })
+
+test('control: pause suppresses the section, passes hooks through, and is recorded once', async () => {
+  await withControl(async (control) => {
+    const stub = stubContext()
+    abg.apply(stub.ctx, {})
+    const section = stub.sections[0]
+
+    control.writeState(controlRecord('paused'))
+    assert.equal(section.text({}), '', 'a paused profile emits no governance section')
+    assert.match(section.text({}), /^$/, 'a second assembly is still suppressed')
+
+    const preStep = await stub.listeners.get('agent/pre-step')[0](
+      { agent: {}, messages: [], turn: 1, step: 1 },
+      async () => ({ kind: 'enter', messages: [] }),
+    )
+    assert.equal(preStep.kind, 'enter', 'a paused profile lets the step through')
+
+    const decision = await stub.listeners.get('tools/pre-execute')[0](
+      { name: 'write', arguments: { file_path: '/a' } },
+      async () => ({ kind: 'allow' }),
+    )
+    assert.equal(decision.kind, 'allow', 'a paused profile does not gate a mutation')
+
+    const paused = stub.logs.filter((entry) => entry.message.includes('control_paused'))
+    assert.equal(paused.length, 1, 'the transition is recorded once, not once per step')
+  })
+})
+
+test('control: start after pause resumes and re-emits the section', async () => {
+  await withControl(async (control) => {
+    const stub = stubContext()
+    abg.apply(stub.ctx, {})
+    const section = stub.sections[0]
+
+    control.writeState(controlRecord('paused'))
+    assert.equal(section.text({}), '')
+    control.writeState(controlRecord('running'))
+    assert.match(section.text({}), /Agent Behavioral Governance \(ABG\)/)
+    assert.ok(stub.logs.some((entry) => entry.message.includes('control_resumed')))
+  })
+})
+
+test('control: exit mounts nothing active, as `enabled: false` does', async () => {
+  await withControl(async (control) => {
+    control.writeState(controlRecord('stopped'))
+    const stub = stubContext()
+    assert.doesNotThrow(() => abg.apply(stub.ctx, {}))
+    assert.equal(stub.sections.length, 0, 'no section while stopped')
+    assert.equal(stub.listeners.size, 0, 'no enforcement while stopped')
+    assert.ok(stub.logs.some((entry) => entry.message.includes('control_stopped')))
+    assert.ok(stub.logs.some((entry) => entry.message.includes('stopped by control state')))
+  })
+})
+
+test('control: a corrupt state file degrades to running and is recorded, never thrown', async () => {
+  await withControl(async (control) => {
+    control.writeState('{ this is not json')
+    const stub = stubContext()
+    assert.doesNotThrow(() => abg.apply(stub.ctx, {}))
+    assert.equal(stub.sections.length, 1, 'a corrupt record must not switch governance off')
+    assert.match(stub.sections[0].text({}), /Agent Behavioral Governance \(ABG\)/)
+    assert.ok(stub.logs.some((entry) => entry.message.includes('control_state_unreadable')))
+  })
+})
+
+test('control: restart bumps generation, which invalidates the cached prompt', async () => {
+  await withControl(async (control) => {
+    const stub = stubContext()
+    abg.apply(stub.ctx, {})
+    const section = stub.sections[0]
+    assert.match(section.text({}), /Agent Behavioral Governance \(ABG\)/)
+
+    // A prompt.md that appears after mount is NOT picked up until a restart:
+    // the contract is that `restart` reloads configuration and prompt.md.
+    control.writePrompt('# House rules\n\n- Never write outside the workspace.\n')
+    assert.match(section.text({}), /Agent Behavioral Governance \(ABG\)/)
+
+    control.writeState(controlRecord('running', 1))
+    // `composePromptOverride` trims, so the effective text carries no trailing newline.
+    assert.equal(section.text({}), '# House rules\n\n- Never write outside the workspace.')
+    assert.ok(stub.logs.some((entry) => entry.message.includes('control_generation_changed')))
+  })
+})
+
+test('control: a valid prompt.md applies at mount and is attributed to its text', async () => {
+  await withControl(async (control) => {
+    control.writePrompt('# House rules\n\n- Never write outside the workspace.\n')
+    const stub = stubContext()
+    abg.apply(stub.ctx, {})
+    stub.mountTools()
+    assert.equal(stub.sections[0].text({}), '# House rules\n\n- Never write outside the workspace.')
+
+    const status = stub.tools.find((tool) => tool.name === abg.STATUS_TOOL_NAME)
+    const report = await status.execute({}, {})
+    assert.equal(report.mount.promptOverridden, true)
+    assert.match(report.mount.promptVersion, /^0\.2\.0\+user:/)
+    assert.equal(report.control.status, 'running')
+    assert.equal(report.control.promptSource, 'control')
+  })
+})
+
+test('control: a refused prompt.md falls back to the compiled default with its reasons', async () => {
+  await withControl(async (control) => {
+    control.writePrompt('Report {{objective}} each turn.')
+    const stub = stubContext()
+    abg.apply(stub.ctx, {})
+    assert.match(stub.sections[0].text({}), /Agent Behavioral Governance \(ABG\)/)
+    const rejection = stub.logs.find((entry) => entry.message.includes('prompt_override_rejected'))
+    assert.ok(rejection, 'a refusal is a governance event, not a silent no-op')
+    assert.match(rejection.message, /interpolation/)
+  })
+})
+

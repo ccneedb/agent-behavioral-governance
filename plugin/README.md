@@ -36,7 +36,9 @@ mutation backstop -> ctx.tools.guard()                   deny only  (monotonic)
 status line       -> ctx.systemPrompt.context()          advisory   (`abg:status`, runtime context)
 diagnostics tool  -> abg_status (registered)             read-only  (mount, config, verdict, ring)
 question surface  -> abg_questions (registered)          read-only  (the per-agent ledger)
-feedback tool     -> abg_report_issue (registered)       read-only  (redacted issue draft, opt-in)
+control plane     -> abg start|pause|restart|exit        control    (state file; absent = running)
+terminal UI       -> abg menu / abg <command>            operator   (ANSI menu + flags, zero deps)
+npm lifecycle     -> abg install|update|uninstall        install    (npm; `exit` never uninstalls)
 compatibility     -> host section inventory + hashes     report     (COMPATIBLE | … | UNSUPPORTED)
 ```
 
@@ -55,7 +57,7 @@ the problem it closes and is covered by the suite.
 | Gate precision | A matrix of 21 legitimate calls plus the declared traps measures `false_block_rate`, `false_blocks`, and `true_blocks` | `MAINTENANCE-HANDOFF` §4 blocker 3; `ARCHITECTURE-SPEC` §32.4, in [`test/integration/gate-precision.test.js`](test/integration/gate-precision.test.js) |
 | Packaging | `LICENSE` (MIT), `CHANGELOG.md`, and a `files` allowlist that ships both | `MAINTENANCE-HANDOFF` §4 blocker 6; **Gate J** |
 
-The package is now `version: 0.5.0` and remains `"private": true`; the peer range
+The package is now `version: 0.6.0` and remains `"private": true`; the peer range
 is narrowed to the verified one (`>=0.2.0-rc.2 <0.3.0`). Removing `private` and
 choosing the publish target are the release decision
 (`ARCHITECTURE-SPEC` §31.1, §34.2 Q5) and are withheld until the model-backed
@@ -128,13 +130,6 @@ it needs.
     preStep:
       orientationGate: off        # off | warn | reject  (blocks the step itself)
       requireBeforeMutation: false # opt-in; true refuses the first write (§34.2 Q1)
-    feedback:
-      enabled: true               # registers the read-only abg_report_issue tool
-      mode: url                   # url (compose a link) | api (also POST the issue)
-      repository: ccneedb/agent-behavioral-governance
-      tokenEnvVar: ABG_GITHUB_TOKEN # read from the environment, only in `api` mode
-      labels: [feedback]
-      includeDiagnostics: true
     prompt:
       mode: compiled              # compiled | append | replace
       append: ""                  # extra guidance, appended to the compiled section
@@ -148,31 +143,6 @@ it needs.
 Defaults are non-intrusive: `requireBeforeMutation` is `false` and the
 orientation gate is `off`, so ABG does not deny the first write of a session
 unless a deployment opts in. Strict mode is one configuration change.
-
-### Feedback (optional)
-
-ABG is a prototype under volunteer testing, so every install registers one more
-read-only tool, **`abg_report_issue`**. Given a one-line summary (plus optional
-"expected"/"actual"), it returns a **prefilled GitHub issue link** and the
-markdown body, composed from the mount record, `degraded[]`, the compatibility
-verdict, and diagnostic *codes*.
-
-- It **never files anything by itself** in the default `url` mode: no network
-  call, no credential, and a human decides to submit.
-- It is **redacted by construction**: diagnostic payloads (`data`), agent and
-  session identifiers, file contents, prompts, and session logs are dropped
-  before composition, so a careless caller cannot leak them through it. The unit
-  suite plants a secret in a diagnostic payload and asserts it never appears in
-  the body or the URL.
-- `feedback.mode: api` is strictly opt-in; it POSTs the issue through the GitHub
-  API using a token read from the environment variable named by
-  `feedback.tokenEnvVar` (default `ABG_GITHUB_TOKEN`) — never from configuration,
-  which is committed and shared. Any failure (no token, refused request, network
-  down) degrades to the prefilled link rather than throwing.
-- `feedback.enabled: false` removes the tool entirely.
-
-The volunteer workflow it supports is documented in
-[`../TESTING.md`](../TESTING.md).
 
 ### Shell-write classification
 
@@ -231,38 +201,72 @@ enforced rule) are reported as `promptUnchecked` with
 `abg.prompt_override_applied`. A user-edited prompt is therefore never presented
 as an audited one.
 
-### Web GUI panel
+### Terminal interface (`abg`)
 
-Installed into a Web profile, ABG adds one sidebar entry whose panel shows the
-mount record, `degraded[]`, the compatibility verdict, `PROMPT_VERSION`, and the
-diagnostic ring. It reads the host route `/api/abg/status` — the same JSON
-contract as `abg_status` and the diagnostics mirror — behind the deployment's
-`/api` browser-trust fence, so there is no separate RPC surface to secure.
+The supported interface is a terminal command, `abg`, run from a Debian shell.
+Running it with no arguments opens an ANSI numbered menu — plain escape codes, no
+ncurses, no dependency, usable over SSH — and every command also works
+non-interactively with flags, because CI and scripts call it. Both modes call the
+same handlers, so the menu cannot drift from the flag surface. Parsing, rendering
+and the `$EDITOR` invocation are hand-rolled over Node builtins: the package keeps
+its zero-runtime-dependency property.
 
-The panel is read-only except for two things:
+```text
+abg                    # ANSI numbered menu
+abg start | pause | restart | exit
+abg install [--profile P] [--from <tarball|dir>] | update ... | uninstall [--profile P]
+abg prompt             # print the effective prompt, its version and byte count
+abg prompt edit        # $EDITOR on a temp copy; validate; store prompt.md
+abg prompt reset       # delete prompt.md -> the compiled default
+abg status [--json]
+abg --help | --version
+```
 
-- **Prompt editor.** The textarea holds the effective section text; **Apply**
-  writes it and it takes effect on the next step (no restart). Editing is
-  enabled only when `prompt.mode: replace` and `prompt.file` name a path —
-  otherwise the editor is read-only and says so. The same validation as the file
-  path applies (no `{{ }}`, byte ceiling unless `allowOverBudget`), a refusal is
-  shown inline, and an applied edit is attributed `PROMPT_VERSION+user:<hash>`
-  with the soft invariants listed as *not verified on user text*.
-- **Feedback form.** Fill what happened / expected / actual, then **Preview**
-  composes the redacted report through the host (`composeFeedback`), with
-  **Copy report** and **Open prefilled issue**; **File issue** appears only in
-  opt-in `api` mode.
+Global options: `--home <dir>` (default `$DSH_HOME` or `~/.dsh`), `--state <file>`,
+`--json`, `--yes`, `--dry-run`. `install` and `update` additionally accept `--from`.
 
-Both post to routes on the same host (`/api/abg/prompt`, `/api/abg/feedback`)
-behind the deployment's browser-trust fence.
+**Control state.** `start | pause | restart | exit` write one small JSON record,
+`{schema, status, generation, updatedAt, editor?}`, at `$ABG_STATE_FILE`, else
+`<state-dir>/abg/state.json` where `<state-dir>` = `$XDG_STATE_HOME` or
+`~/.local/state`. The record is written atomically (temporary sibling, then
+rename). An **absent file means `running`**, so a pre-0.6.0 install behaves exactly
+as before; a corrupt file also means `running`, with the reason reported, never a
+crash. `pause` suppresses the section and lets every hook pass through; `exit` sets
+`stopped`, which mounts nothing active (like `enabled: false`); `start` returns to
+normal; `restart` bumps `generation`, which is the plugin's signal to invalidate
+cached configuration and re-read `prompt.md`.
 
-The browser half is `lib/client.js` and is **hand-authored**: a DSH client plugin
-normally ships a bundle produced by the host monorepo's build, and no public
-out-of-tree build exists, so it is written directly against the lazy-CJS envelope
-(`window.__ModuleLoader__.load({id, factory})`, baseline `require`) and the slot
-registry (`inject = ['slots']`; `ctx.slots.inject` / `register`). It is excluded
-from `tsc` for the same reason first-party built client artifacts are. Edit it and
-re-install the plugin into the profile — there is no build step.
+**`exit` is not uninstall.** Only `install | update | uninstall` touch the
+installation.
+
+**`prompt.md`.** Prompt text is **not** stored inside the control JSON: it lives in
+a sibling `prompt.md`, so the record stays a small control object and the text
+stays something a human edits as text. `abg prompt` prints the effective text with
+its version and byte count; `abg prompt edit` opens `$EDITOR` on a temporary copy
+and stores the result only after validation; `abg prompt reset` deletes the file
+and returns to the compiled default. Precedence is:
+
+```text
+control-plane prompt.md                                 (highest)
+  > config prompt.file   (only when prompt.mode: replace)
+  > config prompt.append (only when prompt.mode: append)
+  > the compiled default                                (lowest)
+```
+
+`prompt.mode: compiled` forces the compiled default whenever no `prompt.md` exists.
+Validation goes through the same `composePromptOverride` kernel the plugin uses, so
+the CLI, a config-supplied file, and the compiled default obey the same two hard
+rules — no `{{ }}` interpolation syntax, and the byte ceiling unless
+`allowOverBudget` — and an accepted override is attributed
+`PROMPT_VERSION+user:<hash>`. A refusal keeps the previous text and prints its
+reasons; it is never a silent no-op.
+
+**Lifecycle.** `abg install | update | uninstall` is the npm-native lifecycle (the
+host's `dsh plugin` path hard-codes pnpm). It refuses to write the live
+`$HOME/.dsh` without `--allow-live` (exit 2) and defaults npm's cache to a writable
+home-local directory, because a read-only `~/.npm` fails every npm operation before
+it starts. `scripts/abg-npm.sh` is a thin wrapper over these commands, so the
+lifecycle has one implementation, not two.
 
 ### Diagnostics mirror (opt-in)
 
@@ -272,17 +276,6 @@ read the in-process ring. It is **off by default** (an empty path means no file
 I/O at all), throttled to one write per 500 ms, written via a temporary file and
 rename, and fails open: an unwritable path is reported once per window as
 `abg.diagnostics_export_failed` and never affects enforcement.
-
-## Approved breaking change (not yet implemented)
-
-The **Web GUI route and the in-harness feedback feature are deprecated and will be
-removed** in the next minor release. The supported interface becomes a terminal
-command, `abg`, run from a Debian shell:
-
-Run `abg --help` for the command list. `start`/`pause` take effect while the harness is running (the plugin re-reads the
-control state each step); `exit` stops governance for the profile. Everything in
-this document still describes **v0.5.1**, the last release with the Web panel and
-feedback; `plugin/CHANGELOG.md` carries the removal list.
 
 ## Install, update, and uninstall
 
@@ -315,37 +308,39 @@ Two consequences:
 registers the new package name in the profile manifest's `dsh.profile.bundles`
 list. That list — not `node_modules` — is what makes DSH compose the `abg` row.
 Plain `npm install` does not know about it, so an npm-only install leaves the
-package on disk but **not mounted**. The helper below performs both steps.
+package on disk but **not mounted**. The `abg` lifecycle below performs both steps.
 
 ### npm-native path (no pnpm required)
 
-From a clone, with `npm`, `node` (>= 20), and `dsh` on `PATH`:
+From a clone, with `npm`, `node` (>= 20), and `dsh` on `PATH` — the command is
+`abg` (`plugin/bin/abg`, or `npm link` from `plugin/`):
 
 ```bash
 # install (packs this repository's plugin/ with `npm pack`)
-./scripts/abg-npm.sh install --profile abg-test
+abg install --profile abg-test
 
 # or install a release tarball you downloaded (the version is plugin/package.json's)
-./scripts/abg-npm.sh install --profile abg-test \
-  --from dsh-agent-behavioral-governance-<version>.tgz
+abg install --profile abg-test --from dsh-agent-behavioral-governance-<version>.tgz
 
 # is it mounted?
-./scripts/abg-npm.sh status --profile abg-test
+abg status --profile abg-test
 
 # update to a newer tarball
-./scripts/abg-npm.sh update --profile abg-test --from dsh-agent-behavioral-governance-<newer-version>.tgz
+abg update --profile abg-test --from dsh-agent-behavioral-governance-<newer-version>.tgz
 
 # uninstall
-./scripts/abg-npm.sh uninstall --profile abg-test
+abg uninstall --profile abg-test
 ```
 
-`scripts/abg-npm.sh` is POSIX `sh`, has no dependencies beyond `node`/`npm`/`dsh`,
-fails loudly, and is safe to run twice. It refuses to write to the live
-`$HOME/.dsh` unless `--allow-live` (or `ABG_NPM_ALLOW_LIVE=1`) is given;
-`status` is read-only. Its `--home <dir>` flag points it at any DSH home, which
-is how the lifecycle check and CI keep the live profile untouched.
+`scripts/abg-npm.sh` is a thin POSIX wrapper over exactly these commands, for
+callers that used it before 0.6.0; both forms take the same flags. The lifecycle
+has no dependencies beyond `node`/`npm`/`dsh`, fails loudly, and is safe to run
+twice. It refuses to write to the live `$HOME/.dsh` unless `--allow-live` (or
+`ABG_NPM_ALLOW_LIVE=1`) is given; `status` is read-only. Its `--home <dir>` flag
+points it at any DSH home, which is how the lifecycle check and CI keep the live
+profile untouched.
 
-Beyond `npm install` / `npm uninstall`, the helper does the three things npm
+Beyond `npm install` / `npm uninstall`, the lifecycle does the three things npm
 does not:
 
 1. it copies a local tarball into `<profile>/.abg-artifacts/` and installs that
@@ -390,8 +385,8 @@ withheld until the model-backed gates pass (`ARCHITECTURE-SPEC` §31.1, §34.2 Q
 ```bash
 cd plugin
 npm run build         # src/**/*.ts -> lib/generated (build artifacts the host loads)
-\1npm test              # node --test (unit + integration) — 265 tests, no todo
-./scripts/verify.sh   # the full evidence chain (12 checks), real profile install
+npm test              # node --test (unit + integration) — 284 tests, no todo
+./scripts/verify.sh   # the full evidence chain, real profile install
 ```
 
 `npm test` runs two layers:
@@ -422,7 +417,7 @@ real agents rather than assertions.
 throwaway `DSH_HOME` inside the repository, so your real profile is never
 touched. Its execution proof runs against the profile's **own installed copy** of
 the package (a real directory, not a link back to the source tree): the installed
-artifact must bind one section, three listeners, and five tools, must absorb a bad
+artifact must bind one section, three listeners, and four tools, must absorb a bad
 configuration into that observable fault surface, and the host must then boot the
 real composition carrying the bad overlay without reporting an unactivated entry.
 

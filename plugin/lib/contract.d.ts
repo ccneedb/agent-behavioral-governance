@@ -177,44 +177,6 @@ interface AbgFileSystemService {
   listDir(target: AbgFsTarget, signal?: unknown): Promise<AbgFsDirEntry[]>
 }
 
-/* ───────────────────────── host: web server (GUI) ────────────────────────── */
-
-/**
- * The minimal response surface the ABG status route touches. The host route
- * handler owns the whole response lifecycle; ABG only ever writes one JSON body.
- */
-interface AbgWebRequest {
-  method?: string
-  url?: string
-  on(event: 'data', listener: (chunk: { length: number }) => void): void
-  on(event: 'end', listener: () => void): void
-  on(event: 'error', listener: (error: unknown) => void): void
-  destroy?(): void
-}
-
-/** Node's `Buffer`, used only to join request-body chunks. */
-declare const Buffer: {
-  concat(chunks: readonly { length: number }[]): { toString(encoding: string): string }
-}
-
-interface AbgWebResponse {
-  writeHead(status: number, headers?: Record<string, string>): void
-  end(body?: string): void
-}
-
-/**
- * `ctx.webServer` (`@deepseek-ai/dsh-host-webserver`), a subset: named route
- * registration. Duplicate (kind, path) throws, and the returned disposer removes
- * the route. Paths under `/api` are behind the deployment's browser-trust fence.
- */
-interface AbgWebServerService {
-  register(route: {
-    kind: 'exact' | 'prefix'
-    path: string
-    handler: (req: AbgWebRequest, res: AbgWebResponse) => void | Promise<void>
-  }): () => void
-}
-
 /* ───────────────────────────── host: cordis ctx ──────────────────────────── */
 
 /** The Cordis context surface ABG uses. Nothing outside this interface is touched. */
@@ -225,55 +187,106 @@ interface AbgContext {
   fs?: AbgFileSystemService
   on(name: string, listener: (...args: any[]) => any, options?: { global?: boolean }): () => void
   get?(name: string): unknown
-  webServer?: AbgWebServerService
   inject?(services: readonly string[], callback: (scoped: AbgContext) => void): void
   effect?(action: () => (() => void) | void, label?: string): () => void
 }
 
-/* ───────────────────────────── host: runtime ─────────────────────────────── */
+/* ───────────────────── host: node runtime (declared slice) ───────────────── */
 
 /**
- * The two runtime globals the optional feedback channel touches (`ARCHITECTURE-SPEC`
- * §28.6). The package has no dependencies and no `@types/node`, so the exact
- * slice it uses is declared here, next to the host seams, for the same reason:
- * what the package depends on stays auditable in one file.
+ * The package has zero dependencies and no `@types/node`, so the exact Node
+ * slice it uses is declared here, next to the host seams: what the package
+ * depends on stays auditable in one file. **Type declarations only** — they add
+ * no runtime code.
  */
-declare const process: { env: Record<string, string | undefined> } | undefined
 
-/** One HTTP response, as far as the feedback channel inspects it. */
-interface AbgFetchResponse {
-  ok: boolean
-  status: number
-  json(): Promise<any>
+interface AbgProcess {
+  argv: string[]
+  env: Record<string, string | undefined>
+  pid: number
+  cwd(): string
+  exitCode?: number
+  exit(code?: number): never
+  stdout: { write(text: string): boolean, isTTY?: boolean }
+  stderr: { write(text: string): boolean, isTTY?: boolean }
+  stdin: { isTTY?: boolean }
 }
 
-/** Request options used by the feedback channel. */
-interface AbgFetchInit {
-  method?: string
-  headers?: Record<string, string>
-  body?: string
-}
+declare const process: AbgProcess
 
-/** Node's global `fetch` (>= 18), used only in opt-in `api` mode. */
-interface AbgFetch {
-  (url: string, init?: AbgFetchInit): Promise<AbgFetchResponse>
-}
-
-declare const fetch: AbgFetch | undefined
-
-/**
- * The filesystem slice the host layer (never the pure kernel) uses: reading a
- * user-supplied prompt override, and writing the opt-in diagnostics export.
- */
 declare module 'node:path' {
   export function dirname(path: string): string
+  export function basename(path: string, suffix?: string): string
+  export function join(...parts: string[]): string
+  export function resolve(...parts: string[]): string
+  export function isAbsolute(path: string): boolean
 }
 
 declare module 'node:fs' {
+  export interface AbgStats {
+    mtimeMs: number
+    size: number
+    isFile(): boolean
+    isDirectory(): boolean
+  }
+  export interface AbgDirent {
+    name: string
+    isFile(): boolean
+    isDirectory(): boolean
+  }
   export function readFileSync(path: string, encoding: 'utf8'): string
   export function writeFileSync(path: string, data: string): void
   export function renameSync(oldPath: string, newPath: string): void
   export function mkdirSync(path: string, options?: { recursive?: boolean }): void
+  export function mkdtempSync(prefix: string): string
+  export function existsSync(path: string): boolean
+  export function statSync(path: string): AbgStats
+  export function unlinkSync(path: string): void
+  export function copyFileSync(source: string, destination: string): void
+  export function rmSync(path: string, options?: { recursive?: boolean, force?: boolean }): void
+  export function readdirSync(path: string): string[]
+}
+
+declare module 'node:os' {
+  export function homedir(): string
+  export function tmpdir(): string
+}
+
+declare module 'node:url' {
+  export function fileURLToPath(url: string): string
+  export function pathToFileURL(path: string): { href: string }
+}
+
+declare module 'node:child_process' {
+  export interface AbgSpawnResult {
+    status: number | null
+    stdout: string
+    stderr: string
+    error?: Error
+  }
+  export interface AbgSpawnOptions {
+    cwd?: string
+    env?: Record<string, string | undefined>
+    encoding?: 'utf8'
+    stdio?: 'inherit' | 'ignore' | 'pipe'
+  }
+  export function spawnSync(command: string, args?: readonly string[], options?: AbgSpawnOptions): AbgSpawnResult
+}
+
+declare module 'node:readline' {
+  export interface AbgReadlineInterface extends AsyncIterable<string> {
+    close(): void
+  }
+  export function createInterface(options: {
+    input: unknown
+    output?: unknown
+    terminal?: boolean
+  }): AbgReadlineInterface
+}
+
+/** `import.meta` is only available to modules; declared for the CLI entry. */
+interface ImportMeta {
+  url: string
 }
 
 /* ──────────────────────────────── ABG config ─────────────────────────────── */
@@ -306,40 +319,7 @@ interface AbgUserAttentionPolicy {
   enforceBatchCompleteness: boolean
 }
 
-/** The subset of the ABG mount record the feedback channel reads. */
-interface AbgFeedbackMount {
-  mounted?: boolean
-  degraded?: readonly string[]
-  modules?: readonly string[]
-  configError?: string
-  compatibility?: { verdict?: string }
-}
-
-/**
- * Optional feedback channel (`ARCHITECTURE-SPEC` §28.6). `url` mode composes a
- * prefilled issue link locally and makes no network call; `api` mode is strictly
- * opt-in and reads its token from the environment, never from configuration.
- */
-interface AbgFeedbackPolicy {
-  enabled: boolean
-  mode: 'url' | 'api'
-  /** `owner/name` of the repository that receives feedback issues. */
-  repository: string
-  /** Environment variable holding the API token, read only in `api` mode. */
-  tokenEnvVar: string
-  labels: readonly string[]
-  includeDiagnostics: boolean
-}
-
 interface AbgModuleToggle {
-  enabled: boolean
-}
-
-/**
- * The Web GUI data route (the panel's read path). Exposes the same payload as
- * `abg_status` and the diagnostics mirror, on the deployment's own web server.
- */
-interface AbgGuiPolicy {
   enabled: boolean
 }
 
@@ -360,8 +340,9 @@ interface AbgPromptPolicy {
 }
 
 /**
- * Opt-in diagnostics mirror for a front end (the GUI integration). Empty `file`
- * means off: the plugin performs no file I/O unless a deployment asks for it.
+ * Opt-in diagnostics mirror for a reader outside the host process — the `abg`
+ * terminal interface reads it. Empty `file` means off: the plugin performs no
+ * file I/O unless a deployment asks for it.
  */
 interface AbgDiagnosticsExportPolicy {
   file: string
@@ -375,9 +356,7 @@ interface AbgConfig {
   workspace: AbgWorkspacePolicy
   preStep: AbgPreStepPolicy
   userAttention: AbgUserAttentionPolicy
-  feedback: AbgFeedbackPolicy
   prompt: AbgPromptPolicy
-  gui: AbgGuiPolicy
   diagnostics: boolean
   diagnosticsExport: AbgDiagnosticsExportPolicy
 }

@@ -70,7 +70,7 @@ problem it addresses.
 ## Known limitations (not vulnerabilities, not bugs)
 
 This is the single home for the accepted-limits list. [`TESTING.md`](TESTING.md) §7
-and [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](docs/TASK-FAILURE-REPORT-TEMPLATE.md) §12
+and [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/bug_report.yml)
 link here rather than restating it; the design-level boundaries are in
 [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md) §34.3.
 
@@ -92,5 +92,6 @@ link here rather than restating it; the design-level boundaries are in
 8. Log narration (`ctx.logger`) is best-effort and invisible in stock
    compositions; use the `abg_status` diagnostic ring instead.
 
-When reporting a *task* failure rather than a vulnerability, use
-[`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](docs/TASK-FAILURE-REPORT-TEMPLATE.md).
+When reporting a *task* failure rather than a vulnerability, use the
+[`.github/ISSUE_TEMPLATE/bug_report.yml`](.github/ISSUE_TEMPLATE/bug_report.yml)
+issue form.

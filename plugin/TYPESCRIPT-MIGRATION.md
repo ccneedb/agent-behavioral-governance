@@ -120,7 +120,7 @@ in `cordis.patch.yml`), so the rewriter leaves the specifier alone and Node's
 | `lib/generated/**/*.js` | **Build artifact.** Never edit by hand; it is what `lib/index.js` and the tests import. |
 | `lib/generated/**/*.d.ts` | Build artifact, required for typecheck (see below), not at runtime. |
 | `lib/**/*.js` (outside `generated/`) | Not-yet-migrated JavaScript, still typechecked with `checkJs`. |
-| `lib/client.js` | Permanent exception — see §4. |
+| `bin/abg` | Permanent exception — see §4. |
 | `lib/contract.d.ts` | Permanent exception — see §4. |
 
 Rebuild after any `src/` edit:
@@ -131,7 +131,7 @@ npx tsc -p tsconfig.build.json     # or: npm run build, once the script key is w
 ```
 
 `tsconfig.json` (the `npm run typecheck` project) includes `lib` **and** `src`
-and excludes `lib/client.js` and `lib/generated`. Declarations are emitted for a
+and excludes `lib/generated`. Declarations are emitted for a
 reason that is easy to trip over: `lib/index.js` is still JavaScript and imports
 `lib/generated/kernel/*.js`. Without a sibling `.d.ts`, TypeScript would load the
 **emitted JavaScript into the `checkJs` program** and fail with hundreds of
@@ -173,8 +173,8 @@ its `.d.ts`; `declaration: true` in `tsconfig.build.json` guarantees that.
 
 | File | Why it stays as it is |
 |---|---|
-| `lib/client.js` | The Web GUI browser half. A DSH client plugin normally ships a bundle produced by the host monorepo's build, and no public out-of-tree build exists, so this file is hand-authored **directly against the host's browser envelope** (`window.__ModuleLoader__.load({id, factory})`, baseline `require`, browser globals, the `slots` registry). It is not Node source and is not loadable by Node; `tsc` cannot meaningfully check it and `tsconfig.json` excludes it for exactly the reason first-party built client artifacts are excluded. It is a **host-mandated contract file**. |
-| `lib/contract.d.ts` | The ambient seam. It is already TypeScript, but it must stay a **global script declaration file** (no imports, no exports) so every type in it is ambient for all of `lib/`. Converting it into a module would force an import into every kernel file and destroy the auditable "these are the only host seams, listed in one file" property. It is a **host-mandated contract file**, not an exception to the language rule. |
+| `bin/abg` | The executable shim Node actually runs. Node in this environment cannot execute `.ts` (verified: `process.features.typescript === false`), and the package ships only compiled JavaScript. The interface itself is TypeScript (`src/bin/abg.ts` → `lib/generated/bin/abg.js`); this file is a few lines that dynamically `import()` the compiled entry point and set `process.exitCode` — a dynamic import so the extensionless file works whether Node treats it as CommonJS or ESM. It is a **host-mandated bin entry**, not source. |
+| `lib/contract.d.ts` | The ambient seam. It is already TypeScript, but it must stay a **global script declaration file** (no imports, no exports) so every type in it is ambient for all of `lib/` and `src/`. Converting it into a module would force an import into every kernel file and destroy the auditable "these are the only host seams, listed in one file" property. It is a **host-mandated contract file**, not an exception to the language rule. |
 | `lib/generated/**/*.js`, `lib/generated/**/*.d.ts` | **Build artifacts** (`tsc -p tsconfig.build.json`). Regenerable, never hand-edited. |
 | `lib/compatibility-baseline.json` | Committed **data**, not source: the reviewed compatibility baseline mirror. JSON is the interchange format the diagnostics/compare tooling reads; there is no TypeScript form of a data file. |
 | `cordis.patch.yml` | Host configuration format (Cordis patch document), not source code. |
@@ -186,17 +186,21 @@ shrink to zero. Until then it is typechecked by `checkJs` exactly as before.
 
 | Path | Lines | Note |
 |---|---:|---|
-| `lib/index.js` | 1170 | The aggregation point; migrates **last** (`main` must keep pointing here throughout). |
-| `lib/kernel/*.js` (11 files) | 3303 | `compatibility` 658, `diagnostics` 442, `config` 360, `overlap` 330, `feedback` 312, `orientation` 291, `registry` 264, `questions` 211, `gui-actions` 177, `durability` 171, `state` 87. |
+| `lib/index.js` | ~1120 | The aggregation point; migrates **last** (`main` must keep pointing here throughout). |
+| `lib/kernel/*.js` (9 files) | 2563 | `compatibility` 658, `diagnostics` 447, `config` 311, `overlap` 330, `orientation` 291, `registry` 264, `questions` 211, `durability` 171, `state` 87. The two kernel modules behind the removed browser route and issue reporter were **deleted** in 0.6.0, so they are no longer migration work. |
 | `lib/modules/*.js` (4 files) | 1092 | `user-attention` 389, `workspace-governance` 331, `information-integrity` 206, `project-governance` 166. |
-| `test/**/*.js` (26 files) | 5545 | Test migration is **blocked** on the runner, not on willingness — see §6. |
+| `test/**/*.js` (28 files) | 5545 | Test migration is **blocked** on the runner, not on willingness — see §6. |
 | `test-support/dsh.js` | 64 | Same blocker. |
 | `eval/**/*.mjs` | — | The behavioural harness is outside the shipped package and outside this slice's scope; it is JavaScript pending the same treatment. |
 | `plugin/scripts/*.sh` | — | Shell, not JavaScript. |
 
-Already migrated (2026-10-02): `lib/kernel/prompt-compiler.js`,
-`lib/kernel/prompt-override.js`, `lib/kernel/export.js` → `src/kernel/*.ts`
-(423 lines of JavaScript removed from `lib/kernel/`).
+Already migrated: `lib/kernel/prompt-compiler.js`, `lib/kernel/prompt-override.js`,
+`lib/kernel/export.js` → `src/kernel/*.ts` (2026-10-02, 423 lines of JavaScript
+removed from `lib/kernel/`), and — with the 0.6.0 control plane — `control`,
+`prompt-store` and `lifecycle` plus the CLI entry `src/bin/abg.ts`. The 0.6.0
+sources compile through `tsconfig.build.json` into `lib/generated/kernel/` and
+`lib/generated/bin/`, and **those generated artifacts are committed**: the package
+ships JavaScript, and DSH loads `lib/generated/**` directly.
 
 ## 5. Migration order and estimates
 
@@ -207,12 +211,13 @@ focused change set with its tests re-pointed, and each step must end with
 | Step | Modules | Lines | Estimate | Why here |
 |---|---|---:|---|---|
 | 1 ✅ | `prompt-compiler`, `prompt-override`, `export` | 423 | done | Complete leaf closure: pure, no host seams, no legacy imports. Proves the build/emit/declare pipeline end to end. |
-| 2 | `config`, `registry`, `diagnostics`, `durability`, `overlap` | 1567 | 1–1.5 days | Kernel leaves with no relative imports. `config` first: `feedback`, `gui-actions` and `index` all import it. Unit tests already exist for each. |
+| 1b ✅ | `control`, `prompt-store`, `lifecycle`, `bin/abg` | — | done | The 0.6.0 control plane and CLI; new source written as TypeScript from the start (see §3 rule 1). |
+| 2 | `config`, `registry`, `diagnostics`, `durability`, `overlap` | 1465 | 1–1.5 days | Kernel leaves with no relative imports. `config` first: `index` imports it. Unit tests already exist for each. |
 | 3 | four `lib/modules/*.js` | 1092 | 1 day | Pure policy modules with their own unit tests; only then can the kernel adapters resolve. |
 | 4 | `orientation`, `questions`, `state` | 589 | 0.5 day | Thin adapters over the modules from step 3; `state` depends on both. |
-| 5 | `feedback`, `gui-actions` | 489 | 0.5 day | Depend on `config` (step 2) and the migrated prompt modules (step 1). |
+| 5 | ~~the removed feedback and GUI-action modules~~ | — | — | **Removed in 0.6.0** together with the browser route and the in-harness issue reporter. No migration work remains here. |
 | 6 | `compatibility` | 658 | 0.5–1 day | Large but self-contained; watch the ambient logging/host types. |
-| 7 | `index.js` → `src/index.ts` | 1170 | 1–1.5 days | Last: every other import is generated by then, and `main` keeps pointing at `lib/index.js`. |
+| 7 | `index.js` → `src/index.ts` | ~1120 | 1–1.5 days | Last: every other import is generated by then, and `main` keeps pointing at `lib/index.js`. |
 | 8 | tests + `test-support/dsh.js` | 5609 | 1.5–2 days | Blocked on the test runner (see §6). |
 | 9 | `eval/` harness | — | separate | Out of the shipped package. |
 
@@ -247,25 +252,29 @@ tests, unchanged except for their import specifiers.
 
 ```console
 $ npm run typecheck          # tsc --checkJs strict, tsconfig.json          → exit 0
-$ npm test                   # pretest builds, then node --test             → 265 pass, 0 fail
-$ ./scripts/verify.sh        # the full evidence chain                     → 12/12 checks passed
+$ npm test                   # pretest builds, then node --test             → 284 pass, 0 fail
+$ ./scripts/verify.sh        # the full evidence chain                     → 22/22 checks passed
 $ npm pack                   # prepack asserts the artifacts, pack ships lib/generated/**
 ```
 
 Three independent checks back the claim that the package still works:
 
-- **265 tests, 0 failures** — the 259 pre-existing tests plus 6 new configuration
-  regression tests; every pre-existing test is byte-identical except for the
-  import specifier of a migrated module.
-- **`verify.sh` 12/12** — step 1 now runs `npm run build` before the typecheck and
-  tests, so a fresh checkout regenerates the artifacts first. Check 6 imports the
+- **284 tests, 0 failures** — this migration slice added 6 configuration
+  regression tests on top of the 259 pre-existing tests, and the 0.6.0
+  control-plane round added the rest. Every test that existed at the time of the
+  migration was byte-identical except for the import specifier of a migrated
+  module.
+- **`verify.sh` 22/22** — step 1 runs `npm run build` before the typecheck and
+  tests, so a fresh checkout regenerates the artifacts first. The installed-artifact
+  check imports the
   **installed** copy's `lib/index.js` (a real directory in a throwaway profile,
   not a link back to the source tree), applies the **installed
   `cordis.patch.yml` verbatim**, and proves it binds one `abg:governance` section,
-  three listeners, and five tools. That import resolves the generated artifacts
-  from the install.
+  three listeners, and four tools. That import resolves the generated artifacts
+  from the install. The 0.6.0 round added a CLI smoke check, a `prompt.md`
+  round-trip and a gating check in place of the removed GUI expectations.
 - **A tarball proof** — `npm pack` + extract + `import <packed>/lib/index.js`
-  mounts one `abg:governance` section and the five tools. The tarball contains
+  mounts one `abg:governance` section and the four tools. The tarball contains
   `lib/generated/kernel/{prompt-compiler,prompt-override,export}.{js,d.ts}`,
   contains **zero** `src/` entries (sources are not shipped), and no longer
   contains the three legacy `lib/kernel/*.js` files.
@@ -311,5 +320,6 @@ because its comparison target no longer exists.
   runtime JavaScript is plain ES2022 and its behaviour on Node 20 is unchanged
   from the JavaScript it replaced (same `target` as the previous `tsconfig.json`).
 - **Not verified.** The migrated artifacts were not exercised against a live
-  agent loop (unchanged from the prototype's existing limits), and the
-  browser-side `lib/client.js` remains hand-authored and unchecked.
+  agent loop (unchanged from the prototype's existing limits). The `abg` terminal
+  interface is exercised only through the compiled `bin/abg` (the CLI smoke and
+  prompt round-trip checks in `verify.sh`), not against a live session.

@@ -14,13 +14,86 @@ names the one it changes: the package `version`, the enforced
 `dsh.engines.dsh` range, `dsh.compatibility.dshReleases`, `PROMPT_VERSION`, and
 the governance state `DOMAIN_VERSION` (§22.3).
 
-> **Release status.** `package.json` declares `version: "0.3.0"` and keeps
+> **Release status.** `package.json` declares `version: "0.6.0"` and keeps
 > `"private": true`, and `dsh.engines.dsh` is narrowed to the verified range
 > (`>=0.2.0-rc.2 <0.3.0`). The version records the capability set; the removal of
 > `private` and the publish target (§34.2 Q5) remain open until the behavioural
-> gates (C, D, E) are met. `0.3.0` is therefore published as a **GitHub release
+> gates (C, D, E) are met. `0.6.0` is therefore published as a **GitHub release
 > for volunteer testing** (a tag plus a packed tarball), not as an npm package:
-> the `0.1.0`/`0.2.0` entries below stay staged under **Unreleased**.
+> the older `0.1.0`/`0.2.0` entries stay staged under **Unreleased** below.
+
+## [0.6.0] — 2026-10-03
+
+**Breaking.** The Web GUI route and the in-harness feedback feature are **removed**,
+not disabled, and replaced by a terminal interface, `abg`, run from a Debian shell.
+`PROMPT_VERSION` is unchanged (`0.2.0`): the compiled governance text is identical.
+
+### Added
+
+- **`abg`, the terminal interface** (`src/bin/abg.ts`, shipped as `bin/abg`).
+  Running it with no arguments opens an ANSI numbered menu — no dependencies, no
+  ncurses, usable over SSH — and every command also works non-interactively with
+  flags, because CI and scripts call it.
+- **The control plane** (`src/kernel/control.ts`): a small, stable JSON record at
+  `$ABG_STATE_FILE`, else `<state-dir>/abg/state.json` (`<state-dir>` =
+  `$XDG_STATE_HOME` or `~/.local/state`), written atomically (temp + rename).
+  `abg start|pause|restart|exit` change `status`; an **absent file means
+  `running`**, so every pre-0.6.0 install behaves exactly as before; a corrupt file
+  means `running` plus a recorded diagnostic, never a crash. `restart` bumps
+  `generation`, which is the plugin's signal to invalidate cached configuration
+  and prompt.
+- **The prompt store** (`src/kernel/prompt-store.ts`): prompt text now lives in a
+  sibling `prompt.md`, not inside the control JSON. It is validated through the
+  existing `composePromptOverride` kernel (no `{{ }}`, byte ceiling unless
+  `allowOverBudget`), attributed as `0.2.0+user:<hash>`, and refused with its
+  reasons — a refusal keeps the previous effective text. `abg prompt edit` opens
+  `$EDITOR` on a temporary copy; `abg prompt reset` deletes the file and returns to
+  the compiled default.
+- **The npm-native lifecycle** (`src/kernel/lifecycle.ts`): `abg install|update|
+  uninstall` is now the single implementation. `scripts/abg-npm.sh` is a thin
+  wrapper over it. It refuses to write the live `$HOME/.dsh` without `--allow-live`
+  (exit 2) and defaults npm's cache to a writable home-local directory rather than
+  a read-only `~/.npm`.
+- **Plugin-side gating** in `lib/index.js`: the control state is re-read (cached by
+  mtime; a re-stat per assembly/step is allowed). `paused` emits no prompt section
+  and lets every hook pass through; `stopped` mounts nothing active, like
+  `enabled: false`; `running` is normal. New diagnostic codes:
+  `abg.control_paused`, `abg.control_resumed`, `abg.control_stopped`,
+  `abg.control_generation_changed`, `abg.control_state_unreadable`.
+- A CLI smoke check, a `prompt.md` round-trip check and a **gating** check in
+  `scripts/verify.sh` (a `paused` state suppresses the section; a generation bump
+  re-reads `prompt.md`). The installed-patch proof that applies the shipped
+  `cordis.patch.yml` verbatim is preserved.
+
+### Removed
+
+- `plugin/lib/client.js`; the `dsh.client` manifest; the `./client` export.
+- The Web routes in `plugin/lib/index.js` (`/api/abg/status`, `/api/abg/prompt`,
+  `/api/abg/feedback`), the `ctx.webServer` injection, and the `gui` configuration
+  block with its contract types.
+- `plugin/lib/kernel/gui-actions.js` and `plugin/lib/kernel/feedback.js`; the
+  `abg_report_issue` tool; the `feedback` configuration block with its contract
+  types.
+- The GUI-route and feedback test cases; `docs/TASK-FAILURE-REPORT-TEMPLATE.md`
+  (deviation reports are now ordinary GitHub issues via `.github/ISSUE_TEMPLATE/`).
+- `abg.gui_route_registered` from the diagnostic vocabulary.
+
+### Kept
+
+- The diagnostics ring **and** the opt-in diagnostics mirror
+  (`plugin/src/kernel/export.ts` → `plugin/lib/generated/kernel/export.js`); the
+  CLI is now the mirror's reader.
+- All four governance modules; `abg_status`, `abg_questions`, `record_orientation`,
+  `record_question`; `apply()` still never throws (§26.2).
+
+### Documentation
+
+- `README.md`, `TESTING.md`, `plugin/README.md`,
+  `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` (§28.6/§28.8 replaced by one control-plane
+  section; §28.7 kept with the CLI as its reader), `MAINTENANCE-HANDOFF.md`,
+  `CONTRIBUTING.md`, `docs/DOCUMENTATION-INDEX.md` and
+  `plugin/TYPESCRIPT-MIGRATION.md` all describe the terminal interface; no
+  document still describes the removed surfaces as live.
 
 ## [0.5.1] — 2026-10-02
 
