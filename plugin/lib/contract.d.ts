@@ -191,6 +191,37 @@ interface AbgContext {
   effect?(action: () => (() => void) | void, label?: string): () => void
 }
 
+/* ───────────────────────────── host: runtime ─────────────────────────────── */
+
+/**
+ * The two runtime globals the optional feedback channel touches (`ARCHITECTURE-SPEC`
+ * §28.6). The package has no dependencies and no `@types/node`, so the exact
+ * slice it uses is declared here, next to the host seams, for the same reason:
+ * what the package depends on stays auditable in one file.
+ */
+declare const process: { env: Record<string, string | undefined> } | undefined
+
+/** One HTTP response, as far as the feedback channel inspects it. */
+interface AbgFetchResponse {
+  ok: boolean
+  status: number
+  json(): Promise<any>
+}
+
+/** Request options used by the feedback channel. */
+interface AbgFetchInit {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+}
+
+/** Node's global `fetch` (>= 18), used only in opt-in `api` mode. */
+interface AbgFetch {
+  (url: string, init?: AbgFetchInit): Promise<AbgFetchResponse>
+}
+
+declare const fetch: AbgFetch | undefined
+
 /* ──────────────────────────────── ABG config ─────────────────────────────── */
 
 interface AbgWorkspacePolicy {
@@ -221,6 +252,31 @@ interface AbgUserAttentionPolicy {
   enforceBatchCompleteness: boolean
 }
 
+/** The subset of the ABG mount record the feedback channel reads. */
+interface AbgFeedbackMount {
+  mounted?: boolean
+  degraded?: readonly string[]
+  modules?: readonly string[]
+  configError?: string
+  compatibility?: { verdict?: string }
+}
+
+/**
+ * Optional feedback channel (`ARCHITECTURE-SPEC` §28.6). `url` mode composes a
+ * prefilled issue link locally and makes no network call; `api` mode is strictly
+ * opt-in and reads its token from the environment, never from configuration.
+ */
+interface AbgFeedbackPolicy {
+  enabled: boolean
+  mode: 'url' | 'api'
+  /** `owner/name` of the repository that receives feedback issues. */
+  repository: string
+  /** Environment variable holding the API token, read only in `api` mode. */
+  tokenEnvVar: string
+  labels: readonly string[]
+  includeDiagnostics: boolean
+}
+
 interface AbgModuleToggle {
   enabled: boolean
 }
@@ -232,6 +288,7 @@ interface AbgConfig {
   workspace: AbgWorkspacePolicy
   preStep: AbgPreStepPolicy
   userAttention: AbgUserAttentionPolicy
+  feedback: AbgFeedbackPolicy
   diagnostics: boolean
 }
 

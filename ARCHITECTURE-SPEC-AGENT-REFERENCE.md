@@ -1281,6 +1281,51 @@ plugin-facing `ignorable` write path or an explicit exemption.
   Status: implemented 2026-10-02 (`degraded[]` in the mount record plus
   `abg.capability_missing` for an absent seam).
 
+### 28.6 Optional feedback channel (v0.3.0)
+
+The prototype's blocking evidence is behavioural, so it can only come from real
+sessions run by volunteers. A tester who observes a deviation must be able to
+report it **in one step**, from inside the session, without assembling environment
+details by hand.
+
+**Design.** One additional read-only tool, `abg_report_issue`, registered in the
+same guarded step as the other tools. It is a *kernel capability*, not a fifth
+governance module: feedback is not a failure class, and adding a module would
+disturb the §24 failure-class coverage contract for no governance benefit.
+
+Two properties are the whole design:
+
+1. **It never files anything by itself.** `feedback.mode: url` (the default)
+   composes a prefilled `github.com/<owner>/<repo>/issues/new` link and the
+   markdown body; no network call is made and no credential is read. A human
+   decides to submit. `mode: api` is strictly opt-in, reads its token from the
+   environment variable named by `feedback.tokenEnvVar` (default
+   `ABG_GITHUB_TOKEN`) — never from configuration, which is committed and shared —
+   and **fails open**: an absent token, a refused request, or a network fault
+   returns the prefilled link instead of an error.
+2. **Redaction by construction.** Diagnostic entries are reduced to
+   `code`/`time`/`module`; `data` (which can carry paths or free text), agent ids,
+   and session ids are dropped *before* composition.
+   `plugin/test/unit/feedback.test.js` plants a secret and a private path in a
+   diagnostic payload and asserts neither appears in the body or the URL, so the
+   channel cannot silently become a disclosure path.
+
+**Why a tool and not prompt text.** Tool descriptions are already model-visible,
+so discoverability does not need a sentence in the compiled section. That keeps
+`PROMPT_VERSION` unchanged (no §22.3 prompt-revision claim) and leaves the §11
+byte budget untouched — a deliberate application of P7 to the plugin's own feature.
+
+**Configuration.** `feedback{enabled, mode, repository, tokenEnvVar, labels,
+includeDiagnostics}`, strictly validated like every other key. `enabled` defaults
+to `true` because `url` mode is inert; a deployment that does not want the tool
+sets it to `false`.
+
+**Evidence.** Unit tests cover redaction, URL composition and truncation (the URL
+payload is bounded at 6,000 bytes and says so rather than emitting a mangled
+link), `url` mode making zero network calls, `api` mode filing exactly once and
+reporting the issue URL, and fail-open on a rejected or broken API. The
+installed-artifact proof in `verify.sh` asserts the tool is registered.
+
 ## 29. Compatibility Adapter Specification
 
 ### 29.1 Problem
@@ -1509,8 +1554,8 @@ phases build on its result.
 | P7 | Packaging | `plugin/package.json`, new `plugin/LICENSE`, new `plugin/CHANGELOG.md`, `plugin/README.md` | P1 | **partial** — LICENSE, CHANGELOG, and the `files` allowlist landed, and the peer range is narrowed to the verified one; publication stays withheld while Gates C, D, and E are unverified |
 
 **Round status.** After the v0.2.0 structural round and the 2026-10-02 mount
-hardening the plugin is at `version: 0.2.0`, still `"private": true`, with
-**228 tests (all pass — no todo, no skip)**, a clean strict typecheck, and
+hardening the plugin is at `version: 0.3.0`, still `"private": true`, with
+**238 tests (all pass — no todo, no skip)**, a clean strict typecheck, and
 `scripts/verify.sh` at **11/11** (typecheck, suite, real install, row composition,
 installed-artifact execution proof, live mount). The unmet items
 are exactly the ones that need a real model in the loop: behavioural

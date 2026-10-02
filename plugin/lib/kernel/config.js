@@ -37,15 +37,36 @@ export const DEFAULT_MUTATING_TOOLS = Object.freeze(['write', 'edit', 'str_repla
  */
 export const DEFAULT_SECTION_ORDER = 8500
 
-const TOP_LEVEL_KEYS = ['enabled', 'sectionOrder', 'modules', 'workspace', 'preStep', 'userAttention', 'diagnostics']
+/** Where the optional feedback channel files issues by default. */
+export const DEFAULT_FEEDBACK_REPOSITORY = 'ccneedb/agent-behavioral-governance'
+
+/**
+ * Environment variable read for the optional API-mode feedback channel. A token
+ * is never taken from configuration and never written to disk, because
+ * configuration is committed and shared.
+ */
+export const DEFAULT_FEEDBACK_TOKEN_ENV = 'ABG_GITHUB_TOKEN'
+
+const TOP_LEVEL_KEYS = [
+  'enabled',
+  'sectionOrder',
+  'modules',
+  'workspace',
+  'preStep',
+  'userAttention',
+  'feedback',
+  'diagnostics',
+]
 const WORKSPACE_KEYS = ['policy', 'mutatingTools', 'protectedPaths', 'overlapCheck', 'classifyShellCommands']
 const PRESTEP_KEYS = ['orientationGate', 'requireBeforeMutation']
 const USER_ATTENTION_KEYS = ['enforceBatchCompleteness']
+const FEEDBACK_KEYS = ['enabled', 'mode', 'repository', 'tokenEnvVar', 'labels', 'includeDiagnostics']
 const MODULE_TOGGLE_KEYS = ['enabled']
 
 const WORKSPACE_POLICIES = ['allow', 'ask', 'deny']
 const ORIENTATION_GATES = ['off', 'warn', 'reject']
 const OVERLAP_MODES = ['off', 'ask', 'deny']
+const FEEDBACK_MODES = ['url', 'api']
 
 /** Raised when a configuration value is missing, malformed, or unknown. */
 export class AbgConfigError extends Error {
@@ -213,6 +234,35 @@ export function resolveConfig(raw) {
       ? true
       : requireBoolean(rawUserAttention.enforceBatchCompleteness, 'userAttention.enforceBatchCompleteness')
 
+  const rawFeedback = input.feedback === undefined ? {} : requireObject(input.feedback, 'feedback.')
+  rejectUnknownKeys(rawFeedback, FEEDBACK_KEYS, 'feedback.')
+  const feedbackMode = rawFeedback.mode === undefined ? 'url' : rawFeedback.mode
+  if (typeof feedbackMode !== 'string' || !FEEDBACK_MODES.includes(feedbackMode)) {
+    throw new AbgConfigError(`"feedback.mode" must be one of ${FEEDBACK_MODES.join(' | ')}`)
+  }
+  const feedback = Object.freeze({
+    // On by default in `url` mode: it composes an issue link locally and makes no
+    // network call, so it cannot leak or fail. `api` mode is strictly opt-in.
+    enabled: rawFeedback.enabled === undefined ? true : requireBoolean(rawFeedback.enabled, 'feedback.enabled'),
+    mode: /** @type {'url' | 'api'} */ (feedbackMode),
+    repository:
+      rawFeedback.repository === undefined
+        ? DEFAULT_FEEDBACK_REPOSITORY
+        : requireString(rawFeedback.repository, 'feedback.repository'),
+    tokenEnvVar:
+      rawFeedback.tokenEnvVar === undefined
+        ? DEFAULT_FEEDBACK_TOKEN_ENV
+        : requireString(rawFeedback.tokenEnvVar, 'feedback.tokenEnvVar'),
+    labels:
+      rawFeedback.labels === undefined
+        ? Object.freeze(['feedback'])
+        : requireStringArray(rawFeedback.labels, 'feedback.labels'),
+    includeDiagnostics:
+      rawFeedback.includeDiagnostics === undefined
+        ? true
+        : requireBoolean(rawFeedback.includeDiagnostics, 'feedback.includeDiagnostics'),
+  })
+
   return Object.freeze({
     enabled,
     sectionOrder,
@@ -223,6 +273,7 @@ export function resolveConfig(raw) {
       requireBeforeMutation,
     }),
     userAttention: Object.freeze({ enforceBatchCompleteness }),
+    feedback,
     diagnostics,
   })
 }

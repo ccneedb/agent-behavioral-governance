@@ -14,12 +14,56 @@ names the one it changes: the package `version`, the enforced
 `dsh.engines.dsh` range, `dsh.compatibility.dshReleases`, `PROMPT_VERSION`, and
 the governance state `DOMAIN_VERSION` (§22.3).
 
-> **Release status.** `package.json` declares `version: "0.2.0"` and keeps
+> **Release status.** `package.json` declares `version: "0.3.0"` and keeps
 > `"private": true`, and `dsh.engines.dsh` is narrowed to the verified range
-> (`>=0.2.0-rc.2 <0.3.0`). The version bump records the capability set; the
-> removal of `private` and the publish target (§34.2 Q5) remain open until the
-> behavioural gates (C, D, E) are met, so this entry is staged under
-> **Unreleased** rather than declared a release.
+> (`>=0.2.0-rc.2 <0.3.0`). The version records the capability set; the removal of
+> `private` and the publish target (§34.2 Q5) remain open until the behavioural
+> gates (C, D, E) are met. `0.3.0` is therefore published as a **GitHub release
+> for volunteer testing** (a tag plus a packed tarball), not as an npm package:
+> the `0.1.0`/`0.2.0` entries below stay staged under **Unreleased**.
+
+## [0.3.0] — 2026-10-02
+
+Adds the volunteer-facing surface: a way to obtain the plugin, and a one-step
+channel for reporting a behavioural deviation from inside the session. No
+model-facing prompt text changed, so `PROMPT_VERSION` stays `0.2.0` and the §11
+byte budget is untouched.
+
+### Added
+
+- **Optional feedback channel** (`lib/kernel/feedback.js`, the read-only
+  `abg_report_issue` tool, and the `feedback{enabled, mode, repository,
+  tokenEnvVar, labels, includeDiagnostics}` configuration block;
+  `ARCHITECTURE-SPEC` §28.6). Given a one-line summary it returns a prefilled
+  GitHub issue link and the markdown body, composed from the mount record,
+  `degraded[]`, the compatibility verdict, and diagnostic *codes*. Two properties
+  are the point: it **never files anything by itself** in the default `url` mode
+  (no network call, no credential; a human submits), and it is **redacted by
+  construction** — diagnostic payloads, agent and session identifiers, file
+  contents, prompts, and session logs are dropped before composition, which
+  `test/unit/feedback.test.js` pins by planting a secret in a diagnostic payload.
+  `mode: api` is strictly opt-in, reads a token from the environment variable
+  named by `feedback.tokenEnvVar` (never from configuration), and fails open to
+  the prefilled link on any error.
+- **Volunteer testing guide** (`TESTING.md`): two installation methods (release
+  tarball, or clone plus `file:` install), the first-trial configuration, the
+  ABG-disabled A/B procedure that the missing evidence actually needs, the
+  uninstall command, and the reporting workflow.
+- **Runtime ambient declarations** in `lib/contract.d.ts` for the two globals the
+  feedback channel touches (`process.env`, `fetch`), so the package keeps its
+  no-dependency, no-`@types/node` property while that dependency stays auditable
+  in one file.
+
+### Changed
+
+- **Package version is now `0.3.0`** (capability addition; `PROMPT_VERSION`
+  remains `0.2.0` because no injected section text changed).
+- **The installed-artifact proof and the wiring suite now expect five tools**
+  (`abg_report_issue` in addition to the two capture tools and two read-only
+  surfaces), and `cordis.patch.yml` documents the `feedback` block.
+- **CI installs TypeScript explicitly** in both jobs. The package ships zero
+  dependencies by design, so a clean runner has no compiler; the alternative —
+  adding a `devDependency` — would have muddied that contract.
 
 ## [Unreleased] — target v0.2.0
 

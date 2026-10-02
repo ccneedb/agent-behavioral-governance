@@ -43,7 +43,7 @@ enforces through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
 ```bash
 cd plugin
 npm run typecheck      # tsc --checkJs, strict, via the ambient contract in lib/contract.d.ts
-npm test               # node --test — 228 tests (all pass; no todo, no skip)
+npm test               # node --test — 238 tests (all pass; no todo, no skip)
 ./scripts/verify.sh    # 11 checks: typecheck, tests, install, composition, execution proof, mount
 ```
 
@@ -56,7 +56,7 @@ node eval/e2e-analyze.mjs              # derives ordering from tool/call events
 
 ## 3. Verified state
 
-**Mechanisms — 228 tests (all pass, no todo, no skip) and 11/11 verification checks at the
+**Mechanisms — 238 tests (all pass, no todo, no skip) and 11/11 verification checks at the
 v0.2.0 structural round; 159 tests at the `0.1.0` record below.** Integration tests
 mount the real `dsh-system-prompt`, `dsh-tools`, `dsh-fs-local`, and the
 `dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack — not mocks.

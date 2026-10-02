@@ -36,6 +36,7 @@ mutation backstop -> ctx.tools.guard()                   deny only  (monotonic)
 status line       -> ctx.systemPrompt.context()          advisory   (`abg:status`, runtime context)
 diagnostics tool  -> abg_status (registered)             read-only  (mount, config, verdict, ring)
 question surface  -> abg_questions (registered)          read-only  (the per-agent ledger)
+feedback tool     -> abg_report_issue (registered)       read-only  (redacted issue draft, opt-in)
 compatibility     -> host section inventory + hashes     report     (COMPATIBLE | … | UNSUPPORTED)
 ```
 
@@ -54,7 +55,7 @@ the problem it closes and is covered by the suite.
 | Gate precision | A matrix of 21 legitimate calls plus the declared traps measures `false_block_rate`, `false_blocks`, and `true_blocks` | `MAINTENANCE-HANDOFF` §4 blocker 3; `ARCHITECTURE-SPEC` §32.4, in [`test/integration/gate-precision.test.js`](test/integration/gate-precision.test.js) |
 | Packaging | `LICENSE` (MIT), `CHANGELOG.md`, and a `files` allowlist that ships both | `MAINTENANCE-HANDOFF` §4 blocker 6; **Gate J** |
 
-The package is now `version: 0.2.0` and remains `"private": true`; the peer range
+The package is now `version: 0.3.0` and remains `"private": true`; the peer range
 is narrowed to the verified one (`>=0.2.0-rc.2 <0.3.0`). Removing `private` and
 choosing the publish target are the release decision
 (`ARCHITECTURE-SPEC` §31.1, §34.2 Q5) and are withheld until the model-backed
@@ -127,11 +128,43 @@ it needs.
     preStep:
       orientationGate: off        # off | warn | reject  (blocks the step itself)
       requireBeforeMutation: false # opt-in; true refuses the first write (§34.2 Q1)
+    feedback:
+      enabled: true               # registers the read-only abg_report_issue tool
+      mode: url                   # url (compose a link) | api (also POST the issue)
+      repository: ccneedb/agent-behavioral-governance
+      tokenEnvVar: ABG_GITHUB_TOKEN # read from the environment, only in `api` mode
+      labels: [feedback]
+      includeDiagnostics: true
 ```
 
 Defaults are non-intrusive: `requireBeforeMutation` is `false` and the
 orientation gate is `off`, so ABG does not deny the first write of a session
 unless a deployment opts in. Strict mode is one configuration change.
+
+### Feedback (optional)
+
+ABG is a prototype under volunteer testing, so every install registers one more
+read-only tool, **`abg_report_issue`**. Given a one-line summary (plus optional
+"expected"/"actual"), it returns a **prefilled GitHub issue link** and the
+markdown body, composed from the mount record, `degraded[]`, the compatibility
+verdict, and diagnostic *codes*.
+
+- It **never files anything by itself** in the default `url` mode: no network
+  call, no credential, and a human decides to submit.
+- It is **redacted by construction**: diagnostic payloads (`data`), agent and
+  session identifiers, file contents, prompts, and session logs are dropped
+  before composition, so a careless caller cannot leak them through it. The unit
+  suite plants a secret in a diagnostic payload and asserts it never appears in
+  the body or the URL.
+- `feedback.mode: api` is strictly opt-in; it POSTs the issue through the GitHub
+  API using a token read from the environment variable named by
+  `feedback.tokenEnvVar` (default `ABG_GITHUB_TOKEN`) — never from configuration,
+  which is committed and shared. Any failure (no token, refused request, network
+  down) degrades to the prefilled link rather than throwing.
+- `feedback.enabled: false` removes the tool entirely.
+
+The volunteer workflow it supports is documented in
+[`../TESTING.md`](../TESTING.md).
 
 ### Shell-write classification
 
@@ -169,7 +202,7 @@ degrade into something the transcript can show rather than into a silent absence
 ```bash
 cd plugin
 npm run typecheck     # tsc --checkJs, strict, against the ambient seam contract
-npm test              # node --test (unit + integration) — 228 tests, no todo
+npm test              # node --test (unit + integration) — 238 tests, no todo
 ./scripts/verify.sh   # the full evidence chain (11 checks), real profile install
 ```
 
@@ -201,7 +234,7 @@ real agents rather than assertions.
 throwaway `DSH_HOME` inside the repository, so your real profile is never
 touched. Its execution proof runs against the profile's **own installed copy** of
 the package (a real directory, not a link back to the source tree): the installed
-artifact must bind one section, three listeners, and four tools, must absorb a bad
+artifact must bind one section, three listeners, and five tools, must absorb a bad
 configuration into that observable fault surface, and the host must then boot the
 real composition carrying the bad overlay without reporting an unactivated entry.
 

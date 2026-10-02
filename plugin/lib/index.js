@@ -41,6 +41,7 @@ import {
   recordSubmittedBatch,
 } from './kernel/questions.js'
 import { createDiagnostics } from './kernel/diagnostics.js'
+import { FEEDBACK_TOOL_NAME, feedbackToolDefinition } from './kernel/feedback.js'
 import { createCompatibilityAdapter, DEFAULT_BASELINE } from './kernel/compatibility.js'
 import { createGovernanceState, agentIdOf } from './kernel/state.js'
 import { createDurableStore, sessionIdOf } from './kernel/durability.js'
@@ -70,6 +71,13 @@ export const STATUS_TOOL_NAME = 'abg_status'
  * prompt revision (ARCHITECTURE-SPEC Part B §22.3, PRODUCT-SPEC PR-07).
  */
 export const PROMPT_VERSION = '0.2.0'
+
+/**
+ * Version of the plugin package, kept in step with `package.json` `version`.
+ * Declared here so a feedback report can name the build it came from without the
+ * plugin reading the filesystem at runtime.
+ */
+export const PLUGIN_VERSION = '0.3.0'
 
 /**
  * Stable kernel invariants: the statements that hold regardless of which modules
@@ -700,6 +708,22 @@ export function apply(ctx, rawConfig) {
         questionsToolDefinition((exec) => governance.forAgent(/** @type {any} */ (exec ?? {}).agent).questions),
       )
     })
+    // Optional feedback channel (§28.6). Off only when a deployment says so: in
+    // `url` mode it composes a prefilled issue link locally and makes no network
+    // call, so the tester can file a redacted report in one step.
+    if (config.feedback.enabled) {
+      guarded(`tools.${FEEDBACK_TOOL_NAME}`, () => {
+        toolCtx.tools?.register(
+          feedbackToolDefinition({
+            config: config.feedback,
+            mount,
+            diagnostics,
+            pluginVersion: PLUGIN_VERSION,
+            promptVersion: PROMPT_VERSION,
+          }),
+        )
+      })
+    }
 
     /**
      * @param {AbgToolExecution} execution

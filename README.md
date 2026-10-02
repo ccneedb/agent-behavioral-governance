@@ -23,7 +23,7 @@ or sandbox. The canonical statement of the integration model is in
 [Canonical architectural statement](#canonical-architectural-statement).
 
 > **Status: prototype, not production-ready.** The plugin is structurally
-> complete and fully green (228 tests, 11/11 verification checks), but its
+> complete and fully green (238 tests, 11/11 verification checks), but its
 > model-backed behavioural gates **C, D, and E have no valid measurement** for
 > the current prompt revision, the package is `"private": true`, and the publish
 > target is undecided. It is not recommended for a working profile. See
@@ -69,6 +69,36 @@ Requirements: Node.js >= 20 and a DeepSeek Harness installation
 (verified against `@deepseek-ai/dsh` `0.2.0-rc.2`; the declared peer range is
 `>=0.2.0-rc.2 <0.3.0`).
 
+### Volunteer testing (download the plugin)
+
+The behavioural gates cannot be measured without real sessions, so volunteers are
+the bottleneck for this project. There are two supported ways to get the plugin —
+a release tarball (no git) and a clone — plus a first-trial configuration, an
+A/B procedure, and a redacted one-step reporting tool:
+
+> **[`TESTING.md`](TESTING.md) — volunteer testing guide**
+
+```bash
+# release tarball
+dsh plugin --profile abg-test --from-default-profile headless --dump-config
+dsh plugin --profile abg-test add \
+  "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.3.0/dsh-agent-behavioral-governance-0.3.0.tgz"
+
+# or from a clone
+git clone --depth 1 https://github.com/ccneedb/agent-behavioral-governance.git abg
+dsh plugin --profile abg-test add "file:$PWD/abg/plugin"
+```
+
+### Feedback from inside the session
+
+Every install ships a read-only tool, **`abg_report_issue`**. When a tester sees a
+behavioural deviation, the agent calls it with a one-line summary; ABG composes a
+prefilled GitHub issue link plus the markdown body, redacted by construction
+(diagnostic payloads, agent/session ids, file contents, prompts, and logs are
+dropped). Nothing is submitted without a human opening the link, and the optional
+`api` mode that files issues directly is strictly opt-in and reads its token from
+the environment.
+
 ## Repository layout
 
 ```text
@@ -81,6 +111,7 @@ MAINTENANCE-HANDOFF.md                point-in-time status and process gotchas
 CONTRIBUTING.md                       prerequisites, checks, and the project rules
 SECURITY.md                           what ABG is not, and how to report
 CODE_OF_CONDUCT.md                    Contributor Covenant 2.1
+TESTING.md                            volunteer install, first trial, and feedback
 LICENSE                               MIT
 docs/                                 the task-failure report template
 .github/                              CI, issue forms, and the pull-request template
@@ -105,7 +136,7 @@ reporting anything.
 
 ## Working prototype
 
-`plugin/` contains an installable **`dsh-agent-behavioral-governance`** `0.2.0`
+`plugin/` contains an installable **`dsh-agent-behavioral-governance`** `0.3.0`
 (`"private": true`, unpublished) that realizes the architecture above with zero
 runtime dependencies. It contributes one additive prompt section and enforces
 through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
@@ -113,10 +144,10 @@ through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
 status line plus the read-only `abg_status` and `abg_questions` tools.
 
 ```bash
-cd plugin && ./scripts/verify.sh    # typecheck, 228 tests, real install, real mount
+cd plugin && ./scripts/verify.sh    # typecheck, 238 tests, real install, real mount
 ```
 
-The evidence chain covers strict typechecking, **228 tests** (all passing — no
+The evidence chain covers strict typechecking, **238 tests** (all passing — no
 todo, no skip; unit, prompt conformance, and integration mounting the **real**
 `dsh-system-prompt`, `dsh-tools`, `dsh-fs-local`, and the
 `dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack), a real install into a
@@ -170,11 +201,15 @@ while catching all **4 traps**.
 
 ## Reporting a task failure
 
-If ABG's governance produced a wrong outcome during real work, use
+Fastest path, from inside the session: ask the agent to call **`abg_report_issue`**
+with a one-line summary of the deviation. It returns a prefilled, redacted GitHub
+issue link and the markdown body — see [`TESTING.md`](TESTING.md) §6.
+
+If you prefer to write it yourself, use
 [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](docs/TASK-FAILURE-REPORT-TEMPLATE.md).
-Its most important step is the A/B check: capture `abg_status`, then run the same
-task with ABG disabled. That separates an ABG defect from a host or model defect
-— which is also exactly the measurement Gates C, D, and E need.
+Either way the most important step is the A/B check: capture `abg_status`, then run
+the same task with ABG disabled. That separates an ABG defect from a host or model
+defect — which is also exactly the measurement Gates C, D, and E need.
 
 ## Canonical architectural statement
 

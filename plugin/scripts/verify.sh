@@ -10,7 +10,7 @@
 #   4. the bundle patch composes an `abg` row with the expected config;
 #   5. the installed plugin is actually EXECUTED — proven positively against the
 #      INSTALLED artifact: it must bind one section, the three listeners, and its
-#      four tools from the profile's own copy of the package, and it must absorb a
+#      five tools from the profile's own copy of the package, and it must absorb a
 #      bad configuration into an observable fault surface instead of unmounting
 #      (§26.2: `apply()` does not throw). The host must then boot the real
 #      composition with that bad overlay and report no unactivated entry.
@@ -212,7 +212,7 @@ assert.deepEqual(
 good.mountTools()
 assert.deepEqual(
   good.tools.map((tool) => tool.name).sort(),
-  ['abg_questions', 'abg_status', 'record_orientation', 'record_question'],
+  ['abg_questions', 'abg_report_issue', 'abg_status', 'record_orientation', 'record_question'],
 )
 
 // (b) §26.2: a bad configuration does not throw and stays observable.
@@ -231,7 +231,7 @@ console.log('installed artifact binds the plugin and degrades a bad config obser
 JS
 
 if node "$PROBE" "$INSTALLED_MODULE" >"${VERIFY_ROOT}/probe.out" 2>&1; then
-  pass "installed artifact binds one section, three listeners, four tools; bad config stays observable"
+  pass "installed artifact binds one section, three listeners, five tools; bad config stays observable"
 else
   fail "installed-artifact execution proof failed"
   sed -n '1,25p' "${VERIFY_ROOT}/probe.out"

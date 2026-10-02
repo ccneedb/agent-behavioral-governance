@@ -81,4 +81,21 @@
         # explicit state rather than prompt prose (PRODUCT-SPEC criterion #3).
         userAttention:
           enforceBatchCompleteness: true
+        # Optional feedback channel for volunteers testing the prototype.
+        #   url (default) -> compose a prefilled GitHub issue link locally; no
+        #                    network call, no credential, the tester submits it
+        #   api           -> also POST the issue through the GitHub API, reading a
+        #                    token from the environment variable below (never from
+        #                    this file, which is committed and shared)
+        # The composed report is redacted by construction: diagnostic payloads,
+        # agent ids, session ids, file contents, prompts, and session logs are all
+        # dropped before composition.
+        feedback:
+          enabled: true
+          mode: url
+          repository: ccneedb/agent-behavioral-governance
+          tokenEnvVar: ABG_GITHUB_TOKEN
+          labels:
+            - feedback
+          includeDiagnostics: true
         diagnostics: true

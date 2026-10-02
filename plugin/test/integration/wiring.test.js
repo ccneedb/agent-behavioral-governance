@@ -144,8 +144,8 @@ test('ABG requests the tool registry through ctx.inject, not eagerly', () => {
   assert.match(String(stub.guards[0]({ name: 'write', arguments: { file_path: '/repo/secrets/k' } })), /protected path/)
   assert.deepEqual(
     stub.tools.map((tool) => tool.name).sort(),
-    ['abg_questions', 'abg_status', 'record_orientation', 'record_question'],
-    'ABG registers exactly its own four tools: two capture tools and two read-only surfaces',
+    ['abg_questions', 'abg_report_issue', 'abg_status', 'record_orientation', 'record_question'],
+    'ABG registers exactly its own five tools: two capture tools and three read-only surfaces',
   )
 })
 

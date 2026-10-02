@@ -1,8 +1,8 @@
 {
   "name": "dsh-agent-behavioral-governance",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Agent Behavioral Governance (ABG): an additive project-work governance layer for DeepSeek Harness. Contributes one system-prompt section and uses deterministic runtime seams (agent/pre-step, tools/pre-execute, tools.guard) for enforcement. Zero runtime dependencies.",
+  "description": "Agent Behavioral Governance (ABG): an additive project-work governance layer for DeepSeek Harness. Contributes one system-prompt section and uses deterministic runtime seams (agent/pre-step, tools/pre-execute, tools.guard) for enforcement, plus an optional redacted feedback channel for testers. Zero runtime dependencies.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
