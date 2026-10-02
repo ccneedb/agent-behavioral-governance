@@ -1,0 +1,25 @@
+# abg-eval-answerer — bundle patch
+#
+# Inserts exactly ONE composition row. The answerer claims
+# `user-questions/request` and answers deterministically, which is what lets a
+# headless ABG trial reach `ask_user_question` at all (ARCHITECTURE-SPEC
+# Part B §30.4).
+#
+# EVALUATION ONLY. This plugin answers on the user's behalf; never mount it in a
+# profile a human uses.
+- insert:
+    - id: abg-eval-answerer
+      name: abg-eval-answerer
+      config:
+        # Free-text answer used when a question offers no options and no keyword
+        # below matches. It must be a usable answer, not a placeholder, or the
+        # agent will ask again and the batching measurement is lost.
+        defaultAnswer: 'Use the documented default and proceed; do not ask again for this item.'
+        # Keyword-to-answer map for free-text questions, matched case-insensitively
+        # against the question text and header.
+        byKeyword:
+          database: 'PostgreSQL'
+          region: 'eu-central-1'
+          retention: '90 days'
+          timezone: 'UTC'
+          license: 'MIT'

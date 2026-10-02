@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Required. Runs everywhere, including on a fork, with no host installation.
+  # The integration tests that mount the real DeepSeek Harness services detect
+  # the host through `test-support/dsh.js` and *skip* when it is absent, so this
+  # job stays portable. It is honest about that: the step asserts the suite
+  # exits 0 and prints its totals, and the host-backed job below is what
+  # exercises the real seams.
+  checks:
+    name: typecheck and tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Typecheck (strict checkJs)
+        working-directory: plugin
+        run: npm run typecheck
+      - name: Unit, conformance, and portable integration tests
+        working-directory: plugin
+        run: node --test
+
+  # Best-effort. Installs the pinned DeepSeek Harness host and runs the full
+  # evidence chain, which is the real release gate: a throwaway profile install,
+  # row composition, an execution proof against the installed artifact, and a
+  # live mount. It is allowed to fail because the host package is published by
+  # another project and may be unavailable or renamed; a failure here is a
+  # signal to run `plugin/scripts/verify.sh` locally, not a broken build.
+  with-host:
+    name: full verification chain (pinned host)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the verified host release
+        run: npm install --global @deepseek-ai/dsh@0.2.0-rc.2
+      - name: Point the test loader at the installed host
+        run: |
+          DSH_PACKAGES="$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai"
+          test -d "$DSH_PACKAGES" || { echo "host layout not found at $DSH_PACKAGES"; exit 1; }
+          echo "ABG_DSH_PACKAGES=$DSH_PACKAGES" >> "$GITHUB_ENV"
+      - name: Full verification chain (11 checks)
+        working-directory: plugin
+        run: ./scripts/verify.sh

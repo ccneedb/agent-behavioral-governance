@@ -1,0 +1,95 @@
+name: Bug report
+description: Report a defect in ABG itself (not a task failure — use the report template for that).
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. ABG is a **prototype**: the model-backed
+        behavioural gates (C, D, E) are unmeasured and it is not recommended for
+        a working profile.
+
+        A **task failure** (ABG's governance produced a wrong outcome during real
+        work) is more useful filed with
+        [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](https://github.com/ccneedb/agent-behavioral-governance/blob/main/docs/TASK-FAILURE-REPORT-TEMPLATE.md)
+        pasted into the issue.
+
+        **Never paste credentials, `~/.dsh/.credentials.yaml` contents, or
+        unredacted session logs.** See `SECURITY.md`.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I called `abg_status` and pasted its JSON below (required if ABG mounted at all).
+          required: false
+        - label: "I reproduced the failure with ABG disabled (`enabled: false` or the `abg-off.yml` overlay), or I explain why that was not possible."
+          required: true
+        - label: This is not in the "Known limitations that are not vulnerabilities" list in `SECURITY.md`.
+          required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, DSH version (`dsh -V`), ABG version, profile, and whether the plugin was re-installed after the last source change.
+      placeholder: |
+        OS: Ubuntu 24.04
+        node -v: v22.x
+        dsh -V: 0.2.0-rc.2
+        ABG: 0.2.0 (PROMPT_VERSION ...)
+        profile: test-profile
+        re-installed after last change: yes
+    validations:
+      required: true
+
+  - type: textarea
+    id: status
+    attributes:
+      label: abg_status output
+      description: "Paste the JSON verbatim. An empty or `mounted: false` result is itself a useful finding."
+      render: json
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Effective configuration
+      description: The `abg` row from `dsh --profile <name> --dump-config`, including any `--patch` overlays.
+      render: yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the exact refusal or allowance text ABG produced, and whether it was a deny or an ask.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Smallest configuration and task that shows the problem. State whether it is deterministic.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I removed credentials, tokens, and private file contents from everything pasted above.
+          required: true

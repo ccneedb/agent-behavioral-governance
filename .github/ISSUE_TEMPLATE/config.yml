@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report (private)
+    url: https://github.com/ccneedb/agent-behavioral-governance/security/advisories/new
+    about: Report a vulnerability privately. Never post credentials or session logs publicly.
+  - name: Task-failure report template
+    url: https://github.com/ccneedb/agent-behavioral-governance/blob/main/docs/TASK-FAILURE-REPORT-TEMPLATE.md
+    about: Use this when ABG's governance produced a wrong outcome during real work.
+  - name: How to contribute
+    url: https://github.com/ccneedb/agent-behavioral-governance/blob/main/CONTRIBUTING.md
+    about: Prerequisites, the checks to run, and the rules that keep this project maintainable.

@@ -1,0 +1,28 @@
+{
+  "name": "abg-eval-answerer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Evaluation-only DeepSeek Harness plugin: a scripted answerer for user-questions/request, so headless ABG trials can reach ask_user_question and measure question consolidation. Never install it in a profile a human uses.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    },
+    "engines": {
+      "dsh": ">=0.2.0-rc.2 <0.3.0"
+    }
+  }
+}

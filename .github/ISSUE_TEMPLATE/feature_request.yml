@@ -1,0 +1,62 @@
+name: Feature request
+description: Propose a capability, a new governance module, or a change to the contract.
+title: "[feature] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ABG is deliberately small. Before proposing a module, check the rules in
+        `CONTRIBUTING.md`: one additive prompt section, deterministic enforcement
+        over prompt text, zero runtime dependencies, and no document that
+        duplicates another.
+
+        The strongest proposals name the **failure class** they address and the
+        **seam** that would enforce them.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of change
+      options:
+        - New governance module
+        - Change to an existing module
+        - Host-integration seam (new or changed)
+        - Diagnostics / observability
+        - Evaluation harness or metrics
+        - Documentation or packaging
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What recurring failure does this address? Which failure class (FC-2.x) or gate does it belong to?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should change? If a rule is mechanically checkable, name the enforcement seam rather than adding prompt text.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and boundaries
+      description: What does this deliberately not cover? Which host semantics must stay authoritative?
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: How it would be verified
+      description: Which test layer or evaluation metric would show that it works, and how would a false positive be detected?
+    validations:
+      required: true

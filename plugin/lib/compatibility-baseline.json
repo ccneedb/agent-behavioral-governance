@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "hostVersion": "0.2.0-rc.2",
+  "sectionNames": [
+    "harness:identity",
+    "deployment:persona-prefix",
+    "abg:governance",
+    "deployment:persona-suffix"
+  ],
+  "hostPromptHash": "ceb63ee5",
+  "capabilities": [
+    "systemPrompt"
+  ]
+}

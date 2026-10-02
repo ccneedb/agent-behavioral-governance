@@ -1,0 +1,757 @@
+/**
+ * Agent Behavioral Governance (ABG) — Cordis plugin entry.
+ *
+ * Contributes exactly **one** additive system-prompt section and binds
+ * deterministic enforcement to verified host seams (`ARCHITECTURE-SPEC` §17):
+ *
+ * ```text
+ * system prompt     -> ctx.systemPrompt.section()      (advisory)
+ * step admission    -> agent/pre-step                  (veto: reject)
+ * mutation gate     -> tools/pre-execute               (gate: ask / deny)
+ * mutation backstop -> ctx.tools.guard()               (monotonic deny)
+ * ```
+ *
+ * The plugin has **zero runtime imports** from first-party packages: everything
+ * it needs arrives through the injected Cordis context. That keeps it mountable
+ * in any composition and immune to the profile's module-resolution layout.
+ */
+
+import { resolveConfig, DEFAULT_SECTION_ORDER } from './kernel/config.js'
+import { createRegistry } from './kernel/registry.js'
+import { compilePrompt, promptStats } from './kernel/prompt-compiler.js'
+import { projectGovernanceModule, createProjectState, evaluateOrientationGate } from './modules/project-governance.js'
+import { informationIntegrityModule } from './modules/information-integrity.js'
+import { userAttentionModule, createQuestionCollector } from './modules/user-attention.js'
+import {
+  workspaceGovernanceModule,
+  classifyMutation,
+  decideMutation,
+  guardBackstop,
+} from './modules/workspace-governance.js'
+import {
+  ORIENTATION_TOOL_NAME,
+  orientationRequirement,
+  orientationToolDefinition,
+} from './kernel/orientation.js'
+import { checkDocumentOverlap } from './kernel/overlap.js'
+import {
+  batchCompletenessRequirement,
+  questionToolDefinition,
+  questionsToolDefinition,
+  recordSubmittedBatch,
+} from './kernel/questions.js'
+import { createDiagnostics } from './kernel/diagnostics.js'
+import { createCompatibilityAdapter, DEFAULT_BASELINE } from './kernel/compatibility.js'
+import { createGovernanceState, agentIdOf } from './kernel/state.js'
+import { createDurableStore, sessionIdOf } from './kernel/durability.js'
+
+/** Cordis plugin name. */
+export const name = 'abg'
+
+/**
+ * ABG's core contribution is the prompt section, so it mounts where the prompt
+ * registry exists. Tool seams attach defensively, so a composition
+ * without them still gets policy and orientation behaviour.
+ */
+export const inject = ['systemPrompt']
+
+/** The single ABG section name. Occupies no host-reserved name. */
+export const SECTION_NAME = 'abg:governance'
+
+/** The runtime-context channel that carries the governance status line. */
+export const STATUS_CONTEXT_NAME = 'abg:status'
+
+/** The read-only tool that reports governance state to the model and operator. */
+export const STATUS_TOOL_NAME = 'abg_status'
+
+/**
+ * Version of the compiled governance prompt. It changes whenever the injected
+ * model-facing text changes, so a behavioural regression is attributable to one
+ * prompt revision (ARCHITECTURE-SPEC Part B §22.3, PRODUCT-SPEC PR-07).
+ */
+export const PROMPT_VERSION = '0.2.0'
+
+/**
+ * Stable kernel invariants: the statements that hold regardless of which modules
+ * are enabled. Compiled ahead of module principles.
+ *
+ * Content rule (handoff §11, "distinguish policy from implementation"): every
+ * statement here must be addressable to the *agent*. PRODUCT-SPEC P7 ("prefer
+ * deterministic enforcement over repeated prompting") is deliberately **not**
+ * included — it governs how this plugin is built, not a behaviour the model can
+ * adopt, and emitting it would leak implementation detail into the prompt.
+ */
+export const KERNEL_PRINCIPLES = Object.freeze([
+  'This governance layer supplements the host instructions; it never replaces them and never outranks a direct user instruction.',
+  'Prefer a safe refusal over an action the user has not authorized.',
+  'Unresolved uncertainty may persist unless proceeding would be unsafe.',
+  'Diagnose before acting destructively, and report the blocking condition in project terms rather than implementation detail.',
+])
+
+/**
+ * The four failure classes of PRODUCT-SPEC §2. Success criterion #2 requires
+ * each to be represented; every class must be claimed by at least one enabled
+ * module, which the prompt-conformance test enforces.
+ */
+export const FAILURE_CLASSES = Object.freeze([
+  'FC-2.1', // project ownership and semantic drift
+  'FC-2.2', // unauthorized workspace mutation
+  'FC-2.3', // reuse of known-invalid information
+  'FC-2.4', // fragmented user questioning
+])
+
+/** The four shipped modules, in registration order. */
+export const MODULES = Object.freeze([
+  projectGovernanceModule,
+  informationIntegrityModule,
+  userAttentionModule,
+  workspaceGovernanceModule,
+])
+
+/**
+ * Build the governance kernel: validated config, registered modules, and the
+ * compiled prompt section. Pure — no Cordis context required — so it is directly
+ * unit-testable.
+ *
+ * @param {unknown} [raw]
+ * @returns {{
+ *   config: AbgConfig,
+ *   registry: ReturnType<typeof createRegistry>,
+ *   enabled: readonly GovernanceModule[],
+ *   prompt: string,
+ *   stats: { bytes: number, characters: number, lines: number },
+ * }}
+ */
+export function buildGovernance(raw) {
+  const config = resolveConfig(raw)
+  const registry = createRegistry()
+  for (const module of MODULES) registry.registerModule(module)
+  registry.configure(config.modules)
+
+  const enabled = registry.getEnabledModules()
+  const prompt = config.enabled ? compilePrompt({ kernelPrinciples: KERNEL_PRINCIPLES, modules: enabled }) : ''
+
+  return { config, registry, enabled, prompt, stats: promptStats(prompt) }
+}
+
+/**
+ * Mount the observable surface of ABG when the kernel cannot be built.
+ *
+ * `ARCHITECTURE-SPEC` §26.2: `apply()` must not throw, because the host reports a
+ * throwing entry as `warning: N entry did not activate` and continues without the
+ * plugin. A governance layer that fails to mount must at least be **visible**, so
+ * this path registers no prompt section and no enforcement, and exposes the fault
+ * through the read-only status surface instead. Fail-safe, and observable: an
+ * operator reading only the transcript can tell that ABG is inert and why.
+ *
+ * @param {AbgContext} ctx
+ * @param {unknown} error
+ * @returns {void}
+ */
+function mountConfigFaultSurface(ctx, error) {
+  const message = error instanceof Error ? error.message : String(error)
+  try {
+    const diagnostics = createDiagnostics({ limit: 200 })
+    diagnostics.record({ code: 'abg.config_invalid', data: { message } })
+    /** Seams that are absent even for the fault surface itself. @type {string[]} */
+    const degraded = []
+    const mount = {
+      mounted: false,
+      degraded,
+      configError: message,
+      promptVersion: PROMPT_VERSION,
+      sectionName: SECTION_NAME,
+      sectionOrder: DEFAULT_SECTION_ORDER,
+      modules: [],
+      moduleCount: 0,
+      compatibility: { verdict: 'PENDING', reasons: [] },
+    }
+
+    if (ctx.systemPrompt === undefined) {
+      degraded.push('systemPrompt')
+    } else {
+      try {
+        ctx.systemPrompt.context?.({
+          name: STATUS_CONTEXT_NAME,
+          order: DEFAULT_SECTION_ORDER,
+          text: () => diagnostics.formatLine(),
+        })
+      } catch {
+        // The tool and the log line below still carry the fault.
+      }
+    }
+
+    if (ctx.inject === undefined) {
+      degraded.push('tools')
+    } else {
+      ctx.inject(['tools'], (toolCtx) => {
+        try {
+          toolCtx.tools?.register({
+            name: STATUS_TOOL_NAME,
+            description:
+              'Read ABG governance state. Read-only. A mount record with "mounted: false" and a configError means the governance layer is inert: no ABG prompt section and no ABG enforcement is active.',
+            parameters: { type: 'object', properties: {} },
+            output: { schema: { type: 'object' }, render: () => [] },
+            execute: async () => ({
+              mount,
+              status_line: diagnostics.formatLine(),
+              diagnostics: diagnostics.recent(20),
+            }),
+          })
+        } catch {
+          // A registry that refuses the tool must not resurrect the mount fault.
+        }
+      })
+    }
+
+    try {
+      ctx.logger?.warn(`abg: config_invalid ${message}`)
+    } catch {
+      // Log narration is best effort by design (§28.3 channel D).
+    }
+  } catch {
+    // Even the diagnostic surface is best effort: `apply()` must never throw.
+  }
+}
+
+/**
+ * Mount ABG.
+ *
+ * Contract (`ARCHITECTURE-SPEC` §26.2): **this function does not throw.**
+ * Configuration faults degrade to a diagnostic, and each capability is
+ * registered inside its own guarded step, so one failing seam cannot cost the
+ * deployment the rest of the governance layer.
+ *
+ * @param {AbgContext} ctx
+ * @param {unknown} [rawConfig]
+ * @returns {void}
+ */
+export function apply(ctx, rawConfig) {
+  /** @type {ReturnType<typeof buildGovernance>} */
+  let kernel
+  try {
+    kernel = buildGovernance(rawConfig)
+  } catch (error) {
+    mountConfigFaultSurface(ctx, error)
+    return
+  }
+
+  const { config, registry, enabled, prompt, stats } = kernel
+
+  if (!config.enabled) {
+    try {
+      ctx.logger?.info('abg: governance disabled by configuration')
+    } catch {
+      // Best-effort narration only.
+    }
+    return
+  }
+
+  // Governance state is per live agent, keyed by the agent object itself
+  // (ARCHITECTURE-SPEC §17.7, Part B §25). One composition therefore serves many
+  // agents without letting them observe each other's orientation or questions.
+  const governance = createGovernanceState()
+
+  /* ── observability (Part B §28) ───────────────────────────────────────── */
+
+  // The ring always records: it is bounded, in-memory, and cheap, and the
+  // read-only status surface must work even when log narration is switched off.
+  // `config.diagnostics` gates only the `ctx.logger` narration, because that is
+  // the channel that is invisible in stock compositions anyway (§28.1).
+  const diagnostics = createDiagnostics({ limit: 200 })
+
+  /**
+   * Capabilities whose registration failed or whose seam was absent. Empty means
+   * a complete mount. `mounted: true` alone cannot distinguish a full mount from a
+   * partial one, so this is what an external health check must key on (§26.1).
+   * @type {string[]}
+   */
+  const degradedCapabilities = []
+
+  /** Mount facts reported by the status tool and the status line. */
+  const mount = /** @type {{
+   *   mounted: boolean,
+   *   degraded: string[],
+   *   promptVersion: string,
+   *   sectionName: string,
+   *   sectionOrder: number,
+   *   promptBytes: number,
+   *   modules: string[],
+   *   moduleCount: number,
+   *   compatibility: { verdict: string, reasons: string[], [key: string]: unknown },
+   * }} */ ({
+    mounted: true,
+    degraded: degradedCapabilities,
+    promptVersion: PROMPT_VERSION,
+    sectionName: SECTION_NAME,
+    sectionOrder: config.sectionOrder,
+    promptBytes: stats.bytes,
+    modules: enabled.map((module) => module.id),
+    moduleCount: enabled.length,
+    /** Replaced by the compatibility adapter's snapshot once it observes one. */
+    compatibility: { verdict: 'PENDING', reasons: [] },
+  })
+
+  /**
+   * Record one diagnostic and, when narration is enabled, keep the historical
+   * `ctx.logger` line byte-for-byte so existing behaviour and tests are stable.
+   *
+   * @param {string} code
+   * @param {Record<string, unknown>} [data]
+   * @param {string} [narration]
+   * @param {'info' | 'warn'} [level]
+   * @returns {void}
+   */
+  const note = (code, data, narration, level = 'info') => {
+    diagnostics.record({ code, data })
+    if (!config.diagnostics || narration === undefined) return
+    // Log narration is best effort (§28.3 channel D): a deployment with a broken
+    // or absent logger must still get the ring, the status line, and the tools.
+    try {
+      if (level === 'warn') ctx.logger?.warn(narration)
+      else ctx.logger?.info(narration)
+    } catch {
+      // Deliberately swallowed: narration must never affect enforcement.
+    }
+  }
+
+  /**
+   * Register one capability, degrading a failure to a diagnostic.
+   *
+   * `ARCHITECTURE-SPEC` §26.2 requires `apply()` not to throw: the host reports a
+   * throwing entry as `warning: N entry did not activate` and continues without
+   * ABG. Isolating each registration means one unavailable seam costs only that
+   * seam, and the fault is recorded where the status surface can report it.
+   *
+   * @param {string} capability
+   * @param {() => void} action
+   * @returns {void}
+   */
+  const guarded = (capability, action) => {
+    try {
+      action()
+    } catch (error) {
+      degradedCapabilities.push(capability)
+      const message = error instanceof Error ? error.message : String(error)
+      note('abg.error', { capability, message }, `abg: ${capability} failed: ${message}`, 'warn')
+    }
+  }
+
+  /**
+   * Record a seam that is absent, which is not the same as a seam ABG does not
+   * need: without this, a vanished host service is indistinguishable from a
+   * capability that was never required.
+   *
+   * @param {string} capability
+   * @returns {void}
+   */
+  const noteMissing = (capability) => {
+    degradedCapabilities.push(capability)
+    note('abg.capability_missing', { capability }, `abg: capability_missing ${capability}`, 'warn')
+  }
+
+  /* ── compatibility adapter (Part B §29) ───────────────────────────────── */
+
+  // Observes the host's own assembly on the `system-prompt/assemble` waterfall.
+  // The listener always calls `next()`: ABG never blocks or replaces an
+  // assembly, so a host drift is reported, never enforced (fail open).
+  const compatibility = createCompatibilityAdapter({
+    baseline: DEFAULT_BASELINE,
+    capabilities: () =>
+      ['systemPrompt', 'tools', 'fs', 'storageDomain', 'userQuestions', 'approval'].filter(
+        (name) => ctx.get?.(name) !== undefined,
+      ),
+    onVerdict: (result, snapshot) => {
+      mount.compatibility = snapshot
+      note('abg.host_compatibility', { verdict: result.verdict, reasons: result.reasons })
+    },
+  })
+
+  guarded('system-prompt/assemble', () => {
+    ctx.on('system-prompt/assemble', (assembly, context, next) => {
+      try {
+        compatibility.observe(assembly, context)
+      } catch (error) {
+        note('abg.error', { phase: 'compatibility', message: String(/** @type {any} */ (error)?.message ?? error) })
+      }
+      return next()
+    })
+  })
+
+  /* ── durable state (handoff Gate F) ───────────────────────────────────── */
+
+  // Storage is optional and every failure degrades to "no persistence"; ABG's
+  // enforcement never depends on it. The fallback also covers a storage seam that
+  // throws during construction, rather than only one that reports an error.
+  /** @type {ReturnType<typeof createDurableStore>} */
+  let durable = {
+    available: async () => false,
+    load: async () => undefined,
+    save: async () => false,
+    close: async () => {},
+  }
+  guarded('storageDomain', () => {
+    durable = createDurableStore(ctx, {
+      onError: (error) =>
+        note(
+          'abg.capability_missing',
+          { capability: 'storageDomain' },
+          `abg: governance persistence unavailable: ${/** @type {any} */ (error)?.message ?? error}`,
+          'warn',
+        ),
+    })
+  })
+  /** Sessions already looked up, so a resumed session costs one read, not one per call. */
+  const hydratedSessions = new Set()
+
+  /**
+   * Restore one agent's orientation from durable state. Called lazily, before
+   * the orientation requirement is evaluated, so a resumed session is not asked
+   * to re-orient work that was already oriented (Gate F).
+   *
+   * @param {unknown} agent
+   * @returns {Promise<boolean>} whether a usable snapshot was restored.
+   */
+  const hydrateOrientation = async (agent) => {
+    const { orientation } = governance.forAgent(agent)
+    if (orientation.isRecorded()) return true
+    const sessionId = sessionIdOf(agent)
+    if (sessionId === '' || hydratedSessions.has(sessionId)) return false
+    hydratedSessions.add(sessionId)
+    const snapshot = await durable.load(sessionId)
+    if (snapshot === undefined) return false
+    if (!orientation.hydrate(snapshot)) return false
+    note('abg.orientation_restored', { sessionId }, 'abg: orientation_restored')
+    return true
+  }
+
+  /**
+   * @param {Record<string, unknown>} snapshot
+   * @param {unknown} exec
+   * @returns {Promise<void>}
+   */
+  const persistOrientation = async (snapshot, exec) => {
+    const agent = /** @type {{ agent?: unknown }} */ (exec ?? {}).agent
+    await durable.save(sessionIdOf(agent), snapshot)
+  }
+
+  guarded('dispose.storageDomain', () => {
+    ctx.effect?.(() => () => {
+      void durable.close()
+    }, 'abg: release the governance domain handle')
+  })
+
+  /* ── 1. the one additive prompt section ───────────────────────────────── */
+
+  // `interpolate: false` is mandatory: governance text is literal, and the host
+  // would otherwise throw on an unknown `{{variable}}` reference. `complete` is
+  // deliberately never set (§4).
+  if (ctx.systemPrompt === undefined) {
+    // `inject` declares this seam as required, so its absence is a host-contract
+    // breach that must be visible rather than a silently empty contribution.
+    noteMissing('systemPrompt')
+  } else {
+    guarded('systemPrompt.section', () => {
+      ctx.systemPrompt?.section({
+        name: SECTION_NAME,
+        order: config.sectionOrder,
+        interpolate: false,
+        text: () => prompt,
+      })
+    })
+
+    // Channel A (§28.3): one bounded status line, registered once. The host
+    // re-evaluates a function-valued `text` on every assembly and supersedes the
+    // previous snapshot instead of accumulating one, and it renders through the
+    // runtime-context channel rather than the compiled prompt — both verified
+    // against the real `dsh-system-prompt`, which resolves assumption B2.
+    if (config.diagnostics) {
+      guarded('systemPrompt.context', () => {
+        ctx.systemPrompt?.context?.({
+          name: STATUS_CONTEXT_NAME,
+          order: config.sectionOrder,
+          text: () => diagnostics.formatLine(),
+        })
+      })
+    }
+  }
+
+  /* ── 2. pre-step orientation gate ─────────────────────────────────────── */
+
+  /**
+   * @param {AbgPreStepPayload} payload
+   * @param {() => Promise<AbgPreStepDecision>} next
+   * @returns {Promise<AbgPreStepDecision>}
+   */
+  const onPreStep = async (payload, next) => {
+    // The step's own agent decides which orientation is evaluated.
+    const agent = payload?.agent
+    const { orientation } = governance.forAgent(agent)
+    const { decision, missing } = evaluateOrientationGate(orientation.state(), config.preStep.orientationGate)
+    if (decision !== null) {
+      note(
+        'abg.orientation_required',
+        { phase: 'pre-step', missing, agentId: agentIdOf(agent) },
+        `abg: pre_step_rejected missing=${missing.join(',')} agent=${agentIdOf(agent) || '-'}`,
+        'warn',
+      )
+      return decision
+    }
+    if (config.preStep.orientationGate === 'warn' && missing.length > 0) {
+      note(
+        'abg.orientation_required',
+        { phase: 'pre-step', outcome: 'warn', missing },
+        `abg: orientation_incomplete missing=${missing.join(',')}`,
+      )
+    }
+    return next()
+  }
+  guarded('agent/pre-step', () => {
+    ctx.on('agent/pre-step', onPreStep)
+  })
+
+  /* ── 3. mutation gate: tools/pre-execute ──────────────────────────────── */
+
+  /**
+   * @param {AbgToolExecution} exec
+   * @param {() => Promise<AbgPreToolDecision>} next
+   * @returns {Promise<AbgPreToolDecision>}
+   */
+  const onPreExecute = async (exec, next) => {
+    // Every decision below is taken against the calling agent's own ledgers.
+    const agent = exec?.agent
+    const { orientation, questions } = governance.forAgent(agent)
+
+    // user-attention observation: how many questions one interaction carried.
+    // This is the batch-size input to the §7 evaluation metrics. The host owns
+    // the interaction; ABG only measures it.
+    if (exec.name === 'ask_user_question') {
+      const args = /** @type {{ questions?: unknown[] }} */ (exec.arguments ?? {})
+      const count = Array.isArray(args.questions) ? args.questions.length : 0
+      note(
+        'abg.question_submitted',
+        { questions: count, agentId: agentIdOf(agent) },
+        `abg: question_submitted questions=${count}`,
+      )
+    }
+
+    // Criterion #3: batching is backed by the ledger's explicit state, so a batch
+    // that leaves registered questions behind is refused. This runs before the
+    // read-only early return because `ask_user_question` is not a mutation.
+    const batchDecision = batchCompletenessRequirement(exec, questions, config.userAttention)
+    if (batchDecision !== null) {
+      note(
+        'abg.question_batch_blocked',
+        { tool: exec.name, agentId: agentIdOf(agent) },
+        `abg: question_batch_blocked tool=${exec.name}`,
+      )
+      return batchDecision
+    }
+
+    const classification = classifyMutation(exec.name, exec.arguments, config.workspace)
+    if (classification.kind === 'read-only') {
+      const decision = await next()
+      // Only retire the questions once the host has actually accepted the batch.
+      if (decision.kind === 'allow') recordSubmittedBatch(exec, questions)
+      return decision
+    }
+
+    // Gate F: a resumed, forked, or restarted session must not be asked to
+    // re-establish orientation it has already declared. One lookup per session,
+    // restored into this agent's own store.
+    await hydrateOrientation(agent)
+
+    // Precedence: a protected path is refused outright, then the orientation
+    // requirement, then the configured workspace policy. The requirement is a
+    // process step, so it denies rather than asking the user.
+    if (classification.protected) {
+      const protectedDecision = decideMutation(classification, config.workspace)
+      note(
+        'abg.workspace_mutation_blocked',
+        { tool: exec.name, reason: 'protected', agentId: agentIdOf(agent) },
+        `abg: workspace_mutation_blocked tool=${exec.name} reason=protected`,
+      )
+      return protectedDecision
+    }
+
+    const orientationDecision = orientationRequirement(classification, config.preStep, orientation)
+    if (orientationDecision !== null) {
+      note(
+        'abg.orientation_required',
+        { tool: exec.name, agentId: agentIdOf(agent) },
+        `abg: orientation_required tool=${exec.name}`,
+      )
+      return orientationDecision
+    }
+
+    // OBJ-2: refuse to let a new document duplicate an existing one. This runs
+    // before the workspace policy so its more specific reason wins, and it
+    // fails open — a heuristic must never break a call.
+    // `ctx.get` is used deliberately: a direct `ctx.fs` accessor throws when the
+    // filesystem service is absent, whereas `get` returns undefined and lets the
+    // check degrade to "no overlap".
+    const fsService = /** @type {AbgFileSystemService | undefined} */ (ctx.get?.('fs'))
+    const overlapDecision = await checkDocumentOverlap({
+      fs: fsService,
+      execution: exec,
+      mode: config.workspace.overlapCheck,
+    })
+    if (overlapDecision !== null) {
+      const outcome = overlapDecision.kind === 'deny' ? 'blocked' : 'gated'
+      note(
+        'abg.document_overlap_flagged',
+        { tool: exec.name, outcome, agentId: agentIdOf(agent) },
+        `abg: document_overlap_${outcome} tool=${exec.name}`,
+      )
+      return overlapDecision
+    }
+
+    const decision = decideMutation(classification, config.workspace)
+    if (decision.kind === 'allow') {
+      note('abg.workspace_mutation_allowed', {
+        tool: exec.name,
+        targets: classification.targets,
+        agentId: agentIdOf(agent),
+      })
+      return next()
+    }
+
+    const outcome = decision.kind === 'deny' ? 'blocked' : 'gated'
+    note(
+      'abg.workspace_mutation_blocked',
+      { tool: exec.name, outcome, targets: classification.targets, agentId: agentIdOf(agent) },
+      `abg: workspace_mutation_${outcome} tool=${exec.name} targets=${classification.targets.join(',') || '-'}`,
+    )
+    return decision
+  }
+  guarded('tools/pre-execute', () => {
+    ctx.on('tools/pre-execute', onPreExecute)
+  })
+
+  /* ── 4. tool registry: the orientation tool and the guard backstop ────── */
+
+  // Registered through `ctx.inject` so they attach whenever the tool registry
+  // becomes available, without making ABG unmountable in tool-less compositions.
+  /**
+   * @param {AbgContext} toolCtx
+   * @returns {void}
+   */
+  const attachTools = (toolCtx) => {
+    /**
+     * Wrap a tool so its calls are auditable without changing its contract.
+     *
+     * @param {AbgToolDefinition} definition
+     * @param {string} code
+     * @returns {AbgToolDefinition}
+     */
+    const observed = (definition, code) => ({
+      ...definition,
+      execute: async (args, exec) => {
+        const result = await definition.execute(args, exec)
+        note(code, { tool: definition.name, agentId: agentIdOf(/** @type {any} */ (exec ?? {}).agent) })
+        return result
+      },
+    })
+
+    // Each tool is registered in its own guarded step: a registry that refuses
+    // one definition must not cost the model the other three, nor the backstop.
+    // The agent's only sanctioned way to satisfy the orientation requirement.
+    // Recording it also persists it, so a resumed session skips the requirement.
+    guarded('tools.record_orientation', () => {
+      toolCtx.tools?.register(
+        observed(
+          orientationToolDefinition((exec) => governance.forAgent(/** @type {any} */ (exec ?? {}).agent).orientation, {
+            onRecorded: persistOrientation,
+          }),
+          'abg.orientation_recorded',
+        ),
+      )
+    })
+    // The explicit state that makes batching enforceable (criterion #3).
+    guarded('tools.record_question', () => {
+      toolCtx.tools?.register(
+        observed(
+          questionToolDefinition((exec) => governance.forAgent(/** @type {any} */ (exec ?? {}).agent).questions),
+          'abg.question_registered',
+        ),
+      )
+    })
+    // Channel B (§28.3): the read-only surface an agent or operator can query.
+    guarded('tools.abg_status', () => {
+      toolCtx.tools?.register({
+        name: STATUS_TOOL_NAME,
+        description:
+          'Read ABG governance state: mount record, enabled modules, active configuration, host-compatibility verdict, and the recent diagnostic ring. Read-only; call it when you need to know what the governance layer is doing.',
+        parameters: { type: 'object', properties: {} },
+        output: { schema: { type: 'object' }, render: () => [] },
+        execute: async (_args, exec) => ({
+          mount,
+          compatibility: mount.compatibility,
+          agentId: agentIdOf(/** @type {any} */ (exec ?? {}).agent),
+          status_line: diagnostics.formatLine(),
+          diagnostics: diagnostics.recent(20),
+          diagnostic_counts: diagnostics.counts(),
+        }),
+      })
+    })
+    // The read-only question surface (§30.3): the model composes the batch.
+    guarded('tools.abg_questions', () => {
+      toolCtx.tools?.register(
+        questionsToolDefinition((exec) => governance.forAgent(/** @type {any} */ (exec ?? {}).agent).questions),
+      )
+    })
+
+    /**
+     * @param {AbgToolExecution} execution
+     * @returns {string | undefined}
+     */
+    const guard = (execution) => guardBackstop(execution, config.workspace)
+    guarded('tools.guard', () => {
+      toolCtx.tools?.guard(guard)
+    })
+  }
+  if (ctx.inject === undefined) {
+    // No injection seam means no capture surfaces at all; that is a degradation
+    // to record, not a quiet no-op.
+    noteMissing('tools')
+  } else {
+    guarded('tools', () => {
+      ctx.inject?.(['tools'], attachTools)
+    })
+  }
+
+  /* ── 5. mount record ──────────────────────────────────────────────────── */
+
+  // Emitted as late as possible, so a partially registered plugin is visible as
+  // a partially registered plugin (Part B §26.1).
+  note(
+    'abg.mount',
+    { modules: enabled.map((module) => module.id), promptVersion: PROMPT_VERSION, promptBytes: stats.bytes },
+    `abg: governance mounted modules=${enabled.map((module) => module.id).join(',')} ` +
+      `section=${SECTION_NAME}@${config.sectionOrder} bytes=${stats.bytes} ` +
+      `workspace=${config.workspace.policy} gate=${config.preStep.orientationGate}`,
+  )
+  if (config.diagnostics) {
+    // Best effort, like every other narration call: the ring and the status
+    // surface already carry this, and a logger fault must not unmount ABG.
+    try {
+      for (const [key, value] of Object.entries(registry.diagnostics())) {
+        if (Array.isArray(value) && value.length > 0) ctx.logger?.info(`abg: ${key}=${value.join(',')}`)
+      }
+    } catch {
+      // Deliberately swallowed.
+    }
+  }
+}
+
+export {
+  resolveConfig,
+  createRegistry,
+  compilePrompt,
+  createProjectState,
+  evaluateOrientationGate,
+  createQuestionCollector,
+  classifyMutation,
+  decideMutation,
+  guardBackstop,
+}

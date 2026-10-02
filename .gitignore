@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Regenerable ABG artifacts — recreate rather than commit
+# (see MAINTENANCE-HANDOFF.md §12 "Regenerable artifacts")
+.pnpm-store/
+.abg-verify/
+
+# Throwaway DSH home used by the evaluation overlays. It holds profiles and
+# session history, and must never be committed.
+.abg-e2e/dsh-home/
+
+# Evaluation sandboxes and derived results. The method lives in eval/README.md;
+# a recorded sandbox is transient by design, and a stale copy reads as standing
+# evidence.
+eval/runs/
+eval/e2e-results.json
+eval/e2e-analysis.json
+
+# Credentials and session data — never commit these, anywhere
+.credentials.yaml
+*.credentials.yaml
+.dsh/
+sessions/
+storages/
+
+# Logs and local scratch
+*.log
+dump.err
+bad.err
+good.err
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
