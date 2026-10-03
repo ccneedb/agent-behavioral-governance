@@ -4,7 +4,7 @@ name: Release artifact
 # GitHub release, so a volunteer can install IEG with no git clone:
 #
 #   dsh-ieg install --profile ieg-test --from \
-#     "https://github.com/ccneedb/information-environment-governance/releases/download/v0.7.0/dsh-information-environment-governance-0.7.0.tgz"
+#     "https://github.com/ccneedb/dsh-information-environment-governance/releases/download/v0.8.0/dsh-information-environment-governance-0.8.0.tgz"
 #
 # (or the equivalent `dsh plugin --profile ieg-test add "<tarball url>"`).
 #
@@ -83,6 +83,6 @@ jobs:
             gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" --clobber
           else
             gh release create "$TAG" "$TARBALL" "$TARBALL.sha256" \
-              --title "information-environment-governance $TAG" --generate-notes
+              --title "dsh-information-environment-governance $TAG" --generate-notes
           fi
           echo "attached $TARBALL to release $TAG"

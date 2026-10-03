@@ -24,6 +24,11 @@ eval/e2e-analysis.json
 sessions/
 storages/
 
+# Release tarballs are regenerable build output (`npm pack`) and are attached to
+# a GitHub release; never commit one.
+*.tgz
+*.tgz.sha256
+
 # Logs and local scratch
 *.log
 dump.err
