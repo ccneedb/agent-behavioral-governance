@@ -114,6 +114,23 @@ interface ControlCache {
   unreadable: boolean
 }
 
+/**
+ * Project one read-only tool's canonical JSON value to model content.
+ *
+ * `ieg_status` is the surface an operator or agent reads to learn what the
+ * governance layer is doing. Its canonical value is already lossless JSON, but
+ * a tool result only reaches the model through `render`, and returning no
+ * content there made the tool silently useless: the call succeeded and the
+ * model saw nothing. Rendering the value fixes that.
+ *
+ * @param {unknown} _args
+ * @param {unknown} value
+ * @returns {Array<{ type: 'text', text: string }>}
+ */
+function renderJson(_args: unknown, value: unknown): Array<{ type: 'text', text: string }> {
+  return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
+}
+
 /** Cordis plugin name. */
 export const name = 'ieg'
 
@@ -138,14 +155,14 @@ export const STATUS_TOOL_NAME = 'ieg_status'
  * model-facing text changes, so a behavioural regression is attributable to one
  * prompt revision (ARCHITECTURE-SPEC Part B §22.3, PRODUCT-SPEC PR-07).
  */
-export const PROMPT_VERSION = '0.3.0'
+export const PROMPT_VERSION = '0.4.0'
 
 /**
  * Version of the plugin package, kept in step with `package.json` `version`.
  * Declared here so the `ieg` CLI can name the build without reading the
  * filesystem at runtime.
  */
-export const PLUGIN_VERSION = '0.8.0'
+export const PLUGIN_VERSION = '0.9.0'
 
 /**
  * Stable kernel invariants: the statements that hold regardless of which modules
@@ -158,7 +175,6 @@ export const PLUGIN_VERSION = '0.8.0'
  * adopt, and emitting it would leak implementation detail into the prompt.
  */
 export const KERNEL_PRINCIPLES = Object.freeze([
-  'This governance layer supplements the host instructions; it never replaces them and never outranks a direct user instruction.',
   'Prefer a safe refusal over an action the user has not authorized.',
   'Unresolved uncertainty may persist unless proceeding would be unsafe.',
   'Diagnose before acting destructively, and report the blocking condition in project terms rather than implementation detail.',
@@ -301,7 +317,7 @@ function mountConfigFaultSurface(ctx: IegContext, error: unknown): void {
             description:
               'Read IEG governance state. Read-only. A mount record with "mounted: false" and a configError means the governance layer is inert: no IEG prompt section and no IEG enforcement is active.',
             parameters: { type: 'object', properties: {} },
-            output: { schema: { type: 'object' }, render: () => [] },
+            output: { schema: { type: 'object' }, render: renderJson },
             execute: async () => ({
               mount,
               status_line: diagnostics.formatLine(),
@@ -991,7 +1007,7 @@ export function apply(ctx: IegContext, rawConfig?: unknown): void {
         description:
           'Read IEG governance state: mount record, enabled modules, active configuration, host-compatibility verdict, and the recent diagnostic ring. Read-only; call it when you need to know what the governance layer is doing.',
         parameters: { type: 'object', properties: {} },
-        output: { schema: { type: 'object' }, render: () => [] },
+        output: { schema: { type: 'object' }, render: renderJson },
         execute: async (_args, exec) => ({
           mount,
           control: {

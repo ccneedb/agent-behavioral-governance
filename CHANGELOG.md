@@ -1,12 +1,12 @@
 ---
 doc_type: changelog
 project: information-environment-governance
-version: 0.8.0
-plugin_version: 0.8.0
+version: 0.9.0
+plugin_version: 0.9.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.8.0-batch-2
+revision: 0.9.0-batch-3
 audience: everyone
 language: en
 ---
@@ -33,11 +33,93 @@ names the one it changes: the package `version`, the enforced
 `dsh.engines.dsh` range, `dsh.compatibility.dshReleases`, `PROMPT_VERSION`, and
 the governance state `DOMAIN_VERSION` (§22.3).
 
-> **Release status.** `package.json` declares `version: "0.8.0"` and keeps
+## [0.9.0] — 2026-10-03
+
+**Prompt optimization, README positioning, and a read-only tool fix.** The
+governance text is now **2,677 bytes**, down from 2,922, and `PROMPT_VERSION`
+moves from `0.3.0` to `0.4.0`. The three governed areas, every pinned
+obligation and the prompt-content rules are unchanged; what left the prompt was
+redundancy, enforcement narration, and a rationale the module already states.
+
+### Changed — the prompt, change by change
+
+The division of responsibility applied here is: **runtime** enforces
+mechanically, **state** records current information status, and the **prompt**
+carries only semantic interpretation, priorities and judgment rules that runtime
+cannot reliably express. Each change below is recorded as change → reason →
+expected effect → regression check (ARCHITECTURE-SPEC §22.3, PRODUCT-SPEC
+PR-07).
+
+1. **The section header now names the Information Environment and absorbs the
+   duplicated invariant.** *Reason:* the "supplements the host instructions /
+   never replaces them" rule appeared twice — once in the header and once as the
+   first kernel invariant — and the compiler's §5.2 dedupe cannot see the header,
+   so the duplication was invisible to every check. *Expected effect:* the scope
+   is stated where the model first reads it, with one fewer bullet and no net
+   growth. *Regression check:* the pinned `never outranks a direct user
+   instruction` and `the host instruction governs` phrases now live in the header
+   and still match the conformance suite; the kernel-principle presence check
+   passes because the invariant is no longer a kernel principle.
+2. **`information-integrity`: dropped the rationale clause** "because a later
+   reader can still pick it up and the annotation does not stop them".
+   *Reason:* the module's own fragment already says the claim must not be
+   encounterable on its own, so the principle stated it twice. *Expected effect:*
+   −85 bytes, identical obligation. *Regression check:* the conformance suite
+   still pins `Delete information you have established is wrong`, `Never leave it
+   in place annotated as wrong` and `remove it at the source`, and the §5.2
+   dedupe still keeps the fragment.
+3. **`workspace-governance`: removed the principle** "Treat new persistent
+   artifacts and structural changes as requiring authorization under the active
+   policy." *Reason:* it restates what `tools/pre-execute` and `ctx.tools.guard`
+   already enforce, which the prompt-content rules forbid; the prompt's job is
+   the judgment that an approval is not standing authorization, not narration of
+   the enforcement. *Expected effect:* −115 bytes. *Regression check:* the
+   `no instruction restates a deterministically enforced rule` test and the OBJ-2
+   overlap assertions still pass.
+4. **`workspace-governance`: the fragment no longer narrates how approval is
+   routed** ("A persistent mutation may be routed to the user for approval,
+   and …"). *Reason:* routing is runtime/state behaviour the model cannot act on;
+   the semantic part is the grant's scope. *Expected effect:* −45 bytes, same
+   judgment. *Regression check:* the conformance suite still pins `each approval
+   covers only that one change`.
+
+No `user-attention` guidance was present to remove — that capability left in
+`0.7.0` (see that entry); this round confirms its absence rather than repeating
+it. **No behavioural improvement is claimed:** Gates C and D remain unmeasured,
+and the prompt change was validated by the prompt-conformance suite and the
+structural simulation only (Batch 3 §2 was executed at that level by explicit
+decision).
+
+### Fixed
+
+- **`ieg_status` now renders content to the model.** The tool declared
+  `render: () => []`, so every call succeeded, returned nothing to the caller,
+  and left an operator unable to see the mount record, the compatibility verdict
+  or the diagnostic ring — observed live while diagnosing a mutation block.
+  `render` now projects the canonical value as JSON text, and the wiring suite
+  asserts that the rendered content is non-empty and carries the mount record.
+  The tool's JSON schema stays `{ type: "object" }`: the host rejects a
+  non-standard `{ type: "json" }` schema, and because registration is guarded a
+  bad schema silently removes the tool instead of failing loudly (caught by the
+  real-tool-runtime integration test).
+
+### Documentation
+
+- README positioning now answers directly what it is, what it governs, what it
+  does **not** govern and who it is for, states the product message (keep the
+  project environment clearer and more consistent over time — not a smarter
+  agent) as an intended benefit rather than a guarantee, and adds a concise
+  Chinese section that preserves the anchor term 信息环境 / Information
+  Environment. English remains the project's working language and its
+  authoritative documentation.
+- The package version, `PROMPT_VERSION` and the prompt byte figures were swept
+  across the documents so no page describes the previous prompt revision.
+
+> **Release status.** `package.json` declares `version: "0.9.0"` and keeps
 > `"private": true`, and `dsh.engines.dsh` is narrowed to the current verified range
 > (`>=0.2.1-alpha.1 <0.3.0`). The version records the capability set; the removal of
 > `private` and the publish target (§34.2 Q5) remain open until the behavioural and
-> information-integrity gates (C, D) are met. `0.8.0` is therefore published as a
+> information-integrity gates (C, D) are met. `0.9.0` is therefore published as a
 > **GitHub release for volunteer testing** (a tag plus a packed tarball), not as an
 > npm package: the older entries stay staged under **Unreleased** below.
 

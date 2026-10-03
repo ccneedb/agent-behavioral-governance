@@ -603,9 +603,22 @@ test('control: a valid prompt.md applies at mount and is attributed to its text'
     const status = stub.tools.find((tool) => tool.name === ieg.STATUS_TOOL_NAME)
     const report = await status.execute({}, {})
     assert.equal(report.mount.promptOverridden, true)
-    assert.match(report.mount.promptVersion, /^0\.3\.0\+user:/)
+    // Derived from the constant, not hardcoded: a prompt revision must never
+    // require a test edit, only a `PROMPT_VERSION` change.
+    const escapedVersion = ieg.PROMPT_VERSION.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    assert.match(report.mount.promptVersion, new RegExp(`^${escapedVersion}\\+user:`))
     assert.equal(report.control.status, 'running')
     assert.equal(report.control.promptSource, 'control')
+
+    // A tool's canonical value only reaches the model through `render`. This
+    // tool once declared `render: () => []`, so every call succeeded and showed
+    // the caller nothing (observed live, 2026-10-03).
+    const rendered = status.output.render({}, report)
+    assert.ok(Array.isArray(rendered) && rendered.length > 0, 'ieg_status must render model-visible content')
+    assert.ok(
+      rendered.some((block) => block.type === 'text' && typeof block.text === 'string' && block.text.includes('mounted')),
+      'ieg_status must render its mount record',
+    )
   })
 })
 

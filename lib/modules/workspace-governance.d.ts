@@ -98,7 +98,7 @@ export declare const workspaceGovernanceModule: Readonly<{
     problem: "unauthorized persistent workspace mutation";
     objective: "make workspace structure an explicitly governed part of project state";
     principles: readonly string[];
-    prompt: "Inspect freely. A persistent mutation may be routed to the user for approval, and each approval covers only that one change; a previous approval or an existing convention is not standing authorization.";
+    prompt: "Inspect freely. A previous approval or an existing convention is not standing authorization: each approval covers only that one change.";
     dependencies: readonly string[];
     risk: "high";
     enabledByDefault: true;

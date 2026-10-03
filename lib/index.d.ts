@@ -45,13 +45,13 @@ export declare const STATUS_TOOL_NAME = "ieg_status";
  * model-facing text changes, so a behavioural regression is attributable to one
  * prompt revision (ARCHITECTURE-SPEC Part B §22.3, PRODUCT-SPEC PR-07).
  */
-export declare const PROMPT_VERSION = "0.3.0";
+export declare const PROMPT_VERSION = "0.4.0";
 /**
  * Version of the plugin package, kept in step with `package.json` `version`.
  * Declared here so the `ieg` CLI can name the build without reading the
  * filesystem at runtime.
  */
-export declare const PLUGIN_VERSION = "0.8.0";
+export declare const PLUGIN_VERSION = "0.9.0";
 /**
  * Stable kernel invariants: the statements that hold regardless of which modules
  * are enabled. Compiled ahead of module principles.
@@ -100,7 +100,7 @@ export declare const MODULES: readonly (Readonly<{
     problem: "unauthorized persistent workspace mutation";
     objective: "make workspace structure an explicitly governed part of project state";
     principles: readonly string[];
-    prompt: "Inspect freely. A persistent mutation may be routed to the user for approval, and each approval covers only that one change; a previous approval or an existing convention is not standing authorization.";
+    prompt: "Inspect freely. A previous approval or an existing convention is not standing authorization: each approval covers only that one change.";
     dependencies: readonly string[];
     risk: "high";
     enabledByDefault: true;

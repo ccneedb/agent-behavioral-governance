@@ -12,7 +12,7 @@ the subject's own narration.
 > **No current measurement exists for this revision.** Every result this harness has
 > produced so far was measured against an earlier, larger governance prompt (first
 > five modules, then four) that no longer exists. The plugin now compiles a
-> **three-module** prompt — **2922 bytes**, `PROMPT_VERSION` **0.3.0** — so those
+> **three-module** prompt — **2,677 bytes**, `PROMPT_VERSION` **0.4.0** — so those
 > numbers described a prompt revision that is gone. They were **deleted rather than
 > annotated**: keeping superseded evidence beside current behaviour is exactly the
 > failure mode IEG exists to prevent. **Gates C (behavioural improvement) and D

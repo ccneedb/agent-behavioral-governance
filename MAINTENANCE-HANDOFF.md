@@ -1,12 +1,12 @@
 ---
 doc_type: maintenance-handoff
 project: information-environment-governance
-plugin_version: 0.8.0
+plugin_version: 0.9.0
 version: 0.8.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.8.0-batch-2
+revision: 0.9.0-batch-3
 host_baseline_verified: dsh-0.2.1-alpha.1
 supersedes: none
 language: en
@@ -74,8 +74,8 @@ node eval/e2e-analyze.mjs              # derives ordering from tool/call events
 `workspace-governance` (`FC-2.2`), all enabled by default, and registers exactly
 two model-facing tools: `record_orientation` and `ieg_status`. It compiles
 **one** prompt section, `ieg:governance` (`order: 8500`, `interpolate: false`,
-`complete` never set), at **`PROMPT_VERSION` 0.3.0**. The compiled section is
-**2,922 bytes**; the recorded ceiling is **3,215 bytes** (floor 1,400, hard cap
+`complete` never set), at **`PROMPT_VERSION` 0.4.0**. The compiled section is
+**2,677 bytes**; the recorded ceiling is **2,945 bytes** (floor 1,400, hard cap
 4,096). Integration tests mount the real `dsh-system-prompt`, `dsh-tools`,
 `dsh-fs-local`, and the `dsh-storage`/`dsh-storage-json`/`dsh-storage-domain`
 stack — not mocks. **272 tests (all pass, no todo, no skip) and 22/22
@@ -263,6 +263,27 @@ control-plane `prompt.md` > config `prompt.file` (mode `replace`) > config
 
 These each cost real time. Do not rediscover them.
 
+- **A delegated agent has no approval channel, so the default policy denies its
+  writes.** With `workspace.policy: ask` (the shipped default) the mutation gate
+  returns `ask` and the host resolves it through `ctx.approval`. A Lead session in
+  the Web GUI has an answerer; an Agent-Teams teammate or subagent session does
+  not, so the gate fails closed and **every** `write`/`edit` it attempts is
+  refused with `ieg.workspace_mutation_blocked` — while the run looks like a
+  mysterious stall rather than a policy decision. Observed live on 2026-10-03: a
+  delegated session recorded its orientation correctly, passed the overlap check,
+  and was still denied on every write, and it correctly refused to route around
+  the gate. Either perform delegated file work in a session with an approval
+  channel, or give the delegated session `workspace: { policy: allow }` for the
+  duration (`dsh-ieg pause` disables enforcement for every agent sharing the
+  state file, not just one). This is the documented fail-closed path working as
+  designed, not a defect — but it is the first thing to check when a teammate
+  produces nothing.
+- **`ieg_status` must render content or it is silently useless.** A tool whose
+  `render` returns no blocks succeeds, records its call, and shows the caller
+  nothing; and because tool registration is guarded, an invalid `output.schema`
+  removes the tool without failing the mount. Both happened (`0.9.0` fixes them);
+  a read-only tool needs a test that asserts its **rendered** content, not just
+  its canonical value.
 - **`dsh plugin --profile <name> <args…>` forwards every argument to pnpm.** Any
   launcher flag placed after `plugin` reaches pnpm and fails with
   `error: unexpected argument '--from-default-profile'` followed by
@@ -522,7 +543,7 @@ old D (user-attention efficiency) -> withdrawn
   repository root became the installable package; `plugin/` was removed; the host
   baseline moved to `0.2.1-alpha.1`; the runtime finished migrating to TypeScript;
   the retired `lib/generated/` output directory was removed). `PROMPT_VERSION` was
-  **unchanged at 0.3.0** and the compiled text is **byte-identical**: this round
+  **unchanged at 0.3.0** and the compiled text **byte-identical** in that round
   deliberately did **not** optimize the prompt. The structural regression
   `test/integration/packaging.test.js` was added, and `bounded-repair` (OBJ-3)
   completed the evaluation scenario set.

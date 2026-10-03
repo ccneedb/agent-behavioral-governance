@@ -2,11 +2,11 @@
 doc_type: architecture-spec
 project: information-environment-governance
 version: 0.8.0
-plugin_version: 0.8.0
+plugin_version: 0.9.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.8.0-batch-2
+revision: 0.9.0-batch-3
 part_a: verified-host-integration-and-prototype-0.1.0
 part_b: target-design-baseline-0.2.0-extended-through-0.8.0
 part_b_status: implemented-through-the-0.8.0-packaging-round; model-backed-gates-C-and-D-pending
@@ -436,8 +436,8 @@ Rules:
 Detailed state belongs in runtime structures, and deterministic checks belong in hooks.
 
 > **Recorded footprint (`0.8.0`; unchanged from `0.7.0`).** The folded
-> three-module section measures **2,922 bytes**; the derived ceiling is
-> **3,215 bytes** (floor 1,400, hard cap 4,096). The rule that derives and
+> three-module section measures **2,677 bytes**; the derived ceiling is
+> **2,945 bytes** (floor 1,400, hard cap 4,096). The rule that derives and
 > enforces that budget is §27; current status and numbers are maintained once in
 > [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3.
 
@@ -504,13 +504,13 @@ prompt versions
 state-schema versions
 ```
 
-The shipped `0.8.0` artifact versions are:
+The shipped `0.9.0` artifact versions are:
 
 ```text
-artifact                      field                    0.8.0 value
+artifact                      field                    0.9.0 value
 ──────────────────────────────────────────────────────────────────────
-package                       package.json `version`   0.8.0 (`private: true`)
-compiled prompt               PROMPT_VERSION           0.3.0
+package                       package.json `version`   0.9.0 (`private: true`)
+compiled prompt               PROMPT_VERSION           0.4.0
 governance state              DOMAIN_VERSION           1
 module semantics              `module.version`         0.2.0 in the three shipped
                                                         descriptors, matching the
@@ -1352,12 +1352,12 @@ diagnostic, and no context contribution is produced.
 - `PROMPT_VERSION` is recorded in diagnostics, not injected into the text.
   `0.7.0` moved it to `0.3.0`.
 - **Budget — recorded footprint (§34.1 B6), implemented.** After the `0.7.0`
-  scope reset the compiled section measures **2,922 bytes** over the three
+  scope reset the compiled section measures **2,677 bytes** over the three
   shipped modules. `src/kernel/prompt-compiler.ts` records that measurement as
   `RECORDED_PROMPT_BYTES` (compiled to `lib/kernel/prompt-compiler.js`,
   which is what the plugin loads) and derives the ceiling as
   `min(PROMPT_BYTE_HARD_CAP, max(PROMPT_BYTE_FLOOR, recorded + 10 %))` —
-  **3,215 bytes** today, from a 1,400-byte floor and a 4,096-byte hard cap. The
+  **2,945 bytes** today, from a 1,400-byte floor and a 4,096-byte hard cap. The
   ceiling is derived from the **recorded** size, never recomputed from the text
   it bounds, so prompt growth cannot silently reset its own budget. `compilePrompt()`
   enforces it, and `test/unit/prompt-compiler.test.js` together with
@@ -1846,8 +1846,9 @@ executed); P6 and P7 carry the still-open work.
 |---|---|---|---|---|
 | P0 | Baseline freeze | `CHANGELOG.md` | — | the `0.1.0` evidence chain is recorded verbatim: `npm test` and `verify.sh` results, prompt size, prompt version |
 | P1 (done) | Withdraw `child-agent-lifecycle` | executed: module, listeners, contract types, test, composition toggle, prompt fragment, and product clauses removed | P0 | **met** — four modules at that revision (three after Batch 1), no dangling reference, Gate J |
-| B1 (done) — Batch 1, `0.7.0` scope reset | Withdraw `user-attention`/`FC-2.4`; rename project, package, CLI (`dsh-ieg`), prompt section (`ieg:governance`@8500), status line (`ieg:status`), tools, diagnostics (`ieg.*`), storage domain (`ieg_governance`), env vars, and throwaway dirs; re-baseline the prompt (`PROMPT_VERSION` 0.3.0, `RECORDED_PROMPT_BYTES` 2922); renumber gates A–J | `package.json`, `src/index.ts`, `src/kernel/*`, `src/modules/*`, `cordis.patch.yml`, `CHANGELOG.md`, this document, `MAINTENANCE-HANDOFF.md` | P1 | **landed 2026-10-03** — three modules, no dangling reference to the withdrawn capability; Gates C and D remain unverified |
+| B1 (done) — Batch 1, `0.7.0` scope reset | Withdraw `user-attention`/`FC-2.4`; rename project, package, CLI (`dsh-ieg`), prompt section (`ieg:governance`@8500), status line (`ieg:status`), tools, diagnostics (`ieg.*`), storage domain (`ieg_governance`), env vars, and throwaway dirs; re-baseline the prompt (`PROMPT_VERSION` 0.4.0, `RECORDED_PROMPT_BYTES` 2922); renumber gates A–J | `package.json`, `src/index.ts`, `src/kernel/*`, `src/modules/*`, `cordis.patch.yml`, `CHANGELOG.md`, this document, `MAINTENANCE-HANDOFF.md` | P1 | **landed 2026-10-03** — three modules, no dangling reference to the withdrawn capability; Gates C and D remain unverified |
 | B2 (done) — Batch 2, `0.8.0` migration and packaging round | Make the repository root the installable DSH bundle (remove `plugin/`); move the baseline to `0.2.1-alpha.1` (single-baseline policy, no legacy layer); finish the TypeScript migration (`src/**/*.ts` → committed `lib/**`; retire `lib/generated/`); set module descriptors to `0.2.0`; add the packaging structural regression and the `bounded-repair` scenario | `package.json`, `cordis.patch.yml`, `src/**`, `lib/**`, `bin/ieg`, `tsconfig*.json`, `test/integration/packaging.test.js`, `eval/scenarios.mjs`, the documents | B1 | **landed 2026-10-03** — `PROMPT_VERSION` unchanged (compiled text byte-identical), structural suite green, Gates C and D still unmeasured |
+| B3 (done) — Batch 3, `0.9.0` prompt and positioning round | Apply the runtime/state/prompt division to the governance text (2,922 → 2,677 bytes; `PROMPT_VERSION` 0.3.0 → 0.4.0) with every change recorded as change → reason → expected effect → regression check; fix the `ieg_status` tool that rendered no content to the model; README positioning that answers what it is, what it governs, what it does not govern and who it is for, states the product message as an intended benefit, and adds a concise Chinese section | `src/kernel/prompt-compiler.ts`, `src/index.ts`, `src/modules/*.ts`, `test/integration/wiring.test.js`, `README.md`, `CHANGELOG.md`, the documents | B2 | **landed 2026-10-03** — prompt-conformance and structural suites green; behavioural improvement still unmeasured (Gates C and D) |
 | P2 | Scope-isolated state | `src/kernel/state.ts`, `src/index.ts`, `src/kernel/orientation.ts`, `src/modules/workspace-governance.ts`, `src/kernel/durability.ts` | P1 | **done** — Gates E and G met |
 | P3 | Diagnostics | `src/kernel/diagnostics.ts`, `src/index.ts`, `lib/contract.d.ts`, `test/unit/diagnostics.test.js`, `test/integration/diagnostics.test.js` | P2 | **done** — Gate F met |
 | P4 | Compatibility adapter | `src/kernel/compatibility.ts`, `lib/compatibility-baseline.json`, `scripts/capture-baseline.mjs`, `test/integration/compatibility.test.js` | P3 | **done** — Gate H met; baseline re-captured for `0.2.1-alpha.1` in B2 |
@@ -1888,7 +1889,7 @@ withdrawn, so it serializes nothing.
    the transcript alone, under the §28.5 fallback if channel A is unavailable
 5. a compatibility regression test that fails on host drift
 6. gate-precision suite with a measured false-block rate
-7. prompt byte ceiling re-recorded (2,922 / 3,215) and asserted
+7. prompt byte ceiling re-recorded (2,677 / 2,945) and asserted
 8. package installable from a clean profile, with a changelog and a license
 9. every §34.2 item either confirmed or still explicitly open — none silently
    decided
@@ -1912,7 +1913,7 @@ withdrawn, so it serializes nothing.
 | B3 | Live state is keyed by the agent object identity (`WeakMap`) instead of §17.7's `ScopedLayers`, to preserve zero first-party imports | **shipped** as designed. `lib/kernel/state.js` keys by agent identity with an unscoped fallback; `test/integration/agent-isolation.test.js` proves two live agents share nothing. The deviation from §17.7 remains a deliberate, recorded choice. |
 | B4 | No plugin-facing host-version service exists; the adapter observes seam facts, and the enforced peer range is the authoritative version gate | verified for `0.2.1-alpha.1` (originally `0.2.0-rc.2`, **SUPERSEDED**) |
 | B5 | Adding a table to an existing `storageDomain` version is open-compatible | to verify before shipping |
-| B6 | The prompt byte ceiling is re-recorded after a withdrawal as measured size + 10 %, floor 1400 bytes, hard cap 4096 bytes | **implemented** — after the `0.7.0` scope reset, `RECORDED_PROMPT_BYTES = 2922`, ceiling `3215` (= `min(4096, max(1400, ceil(2922 × 1.1)))`), floor `1400`, hard cap `4096`; enforced by `compilePrompt()` and asserted from the same constants by the compiler and conformance suites |
+| B6 | The prompt byte ceiling is re-recorded after a withdrawal as measured size + 10 %, floor 1400 bytes, hard cap 4096 bytes | **implemented** — re-recorded at each prompt revision: `0.7.0` recorded `RECORDED_PROMPT_BYTES = 2922` with ceiling `3215`, and the `0.9.0` optimization records `2677` with ceiling `2945` (= `min(4096, max(1400, ceil(2677 × 1.1)))`), floor `1400`, hard cap `4096`; enforced by `compilePrompt()` and asserted from the same constants by the compiler and conformance suites |
 | B7 | The publish target (registry, git, or local path) is undecided | new |
 | B8 | The withdrawal of `user-attention` / `FC-2.4` is a product-level breaking change; its removal has been executed (§23.2) | done — three modules, no dangling reference to the removed capability |
 

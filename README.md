@@ -1,12 +1,12 @@
 ---
 doc_type: readme
 project: information-environment-governance
-version: 0.4.0
-plugin_version: 0.8.0
+version: 0.5.0
+plugin_version: 0.9.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.8.0-batch-2
+revision: 0.9.0-batch-3
 verified_against: dsh-v0.2.1-alpha.1
 language: en
 format_note: conservative-machine-readable-markdown
@@ -14,7 +14,7 @@ format_note: conservative-machine-readable-markdown
 
 # Information Environment Governance (IEG)
 
-[![CI](https://github.com/ccneedb/information-environment-governance/actions/workflows/ci.yml/badge.svg)](https://github.com/ccneedb/information-environment-governance/actions/workflows/ci.yml)
+[![CI](https://github.com/ccneedb/dsh-information-environment-governance/actions/workflows/ci.yml/badge.svg)](https://github.com/ccneedb/dsh-information-environment-governance/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: prototype](https://img.shields.io/badge/status-prototype-orange.svg)](#status)
 
@@ -26,12 +26,80 @@ in [`PRODUCT-SPEC.md` §1](PRODUCT-SPEC.md#1-product-positioning); this README
 links there rather than restating them.
 
 > **Status: prototype, not production-ready.** The package is
-> `dsh-information-environment-governance` **0.8.0**, `"private": true`, and the
+> `dsh-information-environment-governance` **0.9.0**, `"private": true`, and the
 > publish target is undecided. Behavioural improvement (Gate C) and information
 > integrity (Gate D) have no valid measurement for the current prompt revision,
 > and packaging (Gate I) is partial. It is not recommended for a working
 > profile. Current numbers are in
 > [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4; see [Status](#status).
+
+## At a glance
+
+**What is it?** Information Environment Governance for DSH coding agents: one
+additive prompt section plus deterministic runtime gates, shipped as the
+`dsh-information-environment-governance` plugin. It is not a replacement system
+prompt, a second agent identity, a generic prompt improver, or a general safety
+layer.
+
+**What does it govern?**
+
+- project constraints;
+- information / document lifecycle and integrity;
+- workspace hygiene, where it directly supports the information environment.
+
+**What does it not govern?**
+
+- general AI safety / security;
+- sandboxing;
+- authorization;
+- user-attention optimization.
+
+**Who is it for?** Users who rely on coding agents for professional work without
+necessarily having a full software-engineering background.
+
+### The product message
+
+> **The goal is not to make the agent "more intelligent"; it is to keep the
+> project environment clearer, more consistent, and easier for the agent and user
+> to understand over time.**
+
+This is an **intended benefit, not a guarantee** of reliability or of superior
+model capability. The practical problem is a project quietly turning into
+something neither the agent nor the user can reason about any more — the
+"unmaintainable pile" that starts as a few convenient files. Even when the user's
+understanding of the project direction becomes unclear, a well-maintained project
+environment gives the agent a cleaner basis for reconstructing project context.
+
+## 中文说明
+
+**信息环境治理（Information Environment Governance，简称 IEG）** 是为
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 上的编码智能体提供的一层
+**附加**治理。它治理的是智能体所处的**信息环境**（Information Environment）：
+智能体在项目中持续接触、依赖、修改或继承的持久化信息与项目约束。
+
+**治理什么**
+
+- 项目约束：目标、范围、术语、约束、当前阶段；
+- 信息与文档的生命周期与完整性：存在性、状态、权威性、来源、替代关系、可检索性；
+- 工作区整洁（workspace hygiene）——仅限直接支撑信息环境的部分。
+
+**不治理什么**
+
+- 通用的 AI 安全 / 安全防护；
+- 沙箱（sandboxing）；
+- 授权（authorization）；
+- 用户注意力优化（user-attention optimization）。
+
+**面向谁**：把编码智能体用于专业工作的用户，不要求具备完整的软件工程背景。
+
+**核心信息**：目标不是让智能体“更聪明”，而是让项目环境随时间保持**更清晰、更一致**，
+更容易被智能体和用户理解。这是**期望收益，不是可靠性保证**。
+
+> 即使项目方向的把握变得模糊，一个维护良好的项目环境也能为智能体重建项目上下文
+> 提供更干净的基础。
+
+本项目的**工作语言与权威文档为英文**，本节仅为面向中文读者的简要说明；术语与产品边界
+以英文文档为准（[`PRODUCT-SPEC.md`](PRODUCT-SPEC.md) §1）。
 
 ## Contents
 
@@ -144,9 +212,10 @@ config `prompt.append` > the compiled default.
 
 The plugin contributes **one** additive prompt section, `ieg:governance`
 (`order: 8500`, `interpolate: false`, `complete` never set) and **two**
-model-facing tools, `record_orientation` and `ieg_status`. It reports its own
-state through the `ieg:status` runtime-context line and the `ieg.*` diagnostic
-codes. Full runtime detail is in
+model-facing tools, `record_orientation` and `ieg_status`. At `PROMPT_VERSION`
+0.4.0 the compiled section is **2,677 bytes** against a **2,945-byte** ceiling.
+It reports its own state through the `ieg:status` runtime-context line and the
+`ieg.*` diagnostic codes. Full runtime detail is in
 [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md)
 Part B.
 
@@ -171,10 +240,16 @@ without pnpm. If you prefer the host's own path (which forwards to pnpm), the
 equivalent is:
 
 ```bash
-dsh plugin --profile <your-test-profile> add "file:$PLUGIN"
+dsh plugin --profile <your-test-profile> add "file:$PLUGIN"      # local dir or tarball
+dsh plugin --profile <your-test-profile> add \
+  https://github.com/ccneedb/dsh-information-environment-governance   # or the repository itself
 dsh --profile <your-test-profile> --dump-config | grep -A3 'id: ieg'   # verify the row composes
 dsh plugin --profile <your-test-profile> remove dsh-information-environment-governance
 ```
+
+A release tarball is attached to the
+[GitHub release](https://github.com/ccneedb/dsh-information-environment-governance/releases);
+a local tarball or directory and the Git URL install the same root package.
 
 Two caveats worth knowing before first use:
 
@@ -249,7 +324,7 @@ installation is present. Point the loader at a non-default install with
 ## Working prototype
 
 The repository root **is** an installable **`dsh-information-environment-governance`**
-`0.8.0` (`"private": true`, unpublished) that realizes the architecture above
+`0.9.0` (`"private": true`, unpublished) that realizes the architecture above
 with zero runtime dependencies. It contributes one additive prompt section and
 enforces through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
 `ctx.storageDomain`; it reports its own state through a bounded runtime-context
@@ -261,10 +336,12 @@ The runtime is authored in TypeScript under `src/**`; `lib/**` is its committed
 [`TYPESCRIPT-MIGRATION.md`](TYPESCRIPT-MIGRATION.md)).
 
 The evidence chain — run per [`CONTRIBUTING.md`](CONTRIBUTING.md) §Running the
-checks — covers strict typechecking, the full test suite (no todo, no skip; unit,
+checks — covers strict typechecking, the full test suite (**272 tests, all pass**,
+no todo, no skip; unit,
 prompt conformance, and integration mounting the **real** `dsh-system-prompt`,
 `dsh-tools`, `dsh-fs-local`, and the
-`dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack), a real install into
+`dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack) and the **22 checks**
+of [`scripts/verify.sh`](scripts/verify.sh): a real install into
 a throwaway profile, composition of the `ieg` row, and positive proof that the
 **installed** plugin binds its section, listeners, and tools — and absorbs a bad
 configuration observably instead of unmounting. Current counts are in
@@ -283,7 +360,8 @@ re-run rather than superseded numbers.
 
 **Prototype. Not production-ready.**
 
-1. **Gates C and D are unmet** for the current three-module prompt, and **Gate I
+1. **Gates C and D are unmeasured** for the current three-module prompt — **no
+   behavioural claim is made** — and **Gate I
    (packaging) is partial**. Gate C needs a model-backed run of
    [`eval/`](eval/README.md) with a rubric frozen beforehand and a judge that
    does not see the arm. Gate D needs the same kind of run for information

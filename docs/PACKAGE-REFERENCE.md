@@ -2,11 +2,11 @@
 doc_type: implementation-readme
 project: information-environment-governance
 version: 0.8.0
-plugin_version: 0.8.0
+plugin_version: 0.9.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.8.0-batch-2
+revision: 0.9.0-batch-3
 audience: implementers + operators
 language: en
 ---
@@ -141,8 +141,8 @@ the plugin adds text and never claims the section is complete.
 | Property | Value |
 |---|---|
 | `PROMPT_VERSION` | `0.3.0` |
-| Compiled section size | **2922 bytes** |
-| Recorded ceiling | **3215 bytes** |
+| Compiled section size | **2,677 bytes** |
+| Recorded ceiling | **2,945 bytes** |
 | Floor | 1400 bytes |
 | Hard cap | 4096 bytes |
 

@@ -20,11 +20,11 @@
  */
 /**
  * Recorded size of the compiled three-module governance section, in UTF-8 bytes,
- * measured at `PROMPT_VERSION` `0.3.0`. The ceiling is derived from this
+ * measured at `PROMPT_VERSION` `0.4.0`. The ceiling is derived from this
  * recorded footprint rather than from the current compilation: a budget that is
  * recomputed from the text it is meant to bound can never detect growth.
  */
-export declare const RECORDED_PROMPT_BYTES = 2922;
+export declare const RECORDED_PROMPT_BYTES = 2677;
 /** Floor for the ceiling, so a shrunken prompt cannot drive the budget to zero (§34.1 B6). */
 export declare const PROMPT_BYTE_FLOOR = 1400;
 /** Hard cap on the ceiling, independent of the recorded size (§34.1 B6). */

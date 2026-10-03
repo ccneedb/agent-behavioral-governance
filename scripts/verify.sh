@@ -44,6 +44,13 @@ if [ -e "$PNPM_STORE" ]; then
 fi
 PROFILE="iegverify"
 
+# Expected versions are derived, never pinned: a package or prompt revision must
+# not require editing the release gate (this brittleness broke the gate twice).
+EXPECTED_PACKAGE_VERSION="$(${NODE_BIN} -p "require('${PACKAGE_DIR}/package.json').version")"
+EXPECTED_PROMPT_VERSION="$(${NODE_BIN} --input-type=module -e "
+  import('${PACKAGE_DIR}/lib/index.js').then((m) => process.stdout.write(m.PROMPT_VERSION))
+")"
+
 cleanup() {
   if [ "$STORE_PREEXISTED" -eq 0 ]; then
     rm -rf "$PNPM_STORE"
@@ -381,8 +388,8 @@ rm -rf "$CLI_DIR"
 mkdir -p "$CLI_DIR"
 CLI=("$NODE_BIN" "$IEG_CLI")
 
-if "${CLI[@]}" --help >/dev/null 2>&1 && [ "$("${CLI[@]}" --version 2>/dev/null)" = "0.8.0" ]; then
-  pass "ieg --help and --version (0.8.0)"
+if "${CLI[@]}" --help >/dev/null 2>&1 && [ "$("${CLI[@]}" --version 2>/dev/null)" = "${EXPECTED_PACKAGE_VERSION}" ]; then
+  pass "ieg --help and --version (${EXPECTED_PACKAGE_VERSION})"
 else
   fail "ieg --help / --version"
 fi
@@ -446,7 +453,7 @@ else
 fi
 if "${CLI[@]}" --state "$PROMPT_STATE" prompt >"${PROMPT_DIR}/print.log" 2>&1 &&
    grep -q '^# House rules$' "${PROMPT_DIR}/print.log" &&
-   grep -q 'version 0.3.0+user:' "${PROMPT_DIR}/print.log"; then
+   grep -q "version ${EXPECTED_PROMPT_VERSION}+user:" "${PROMPT_DIR}/print.log"; then
   pass "prompt prints the effective text, its version and byte count"
 else
   fail "prompt print"; sed -n '1,20p' "${PROMPT_DIR}/print.log"
