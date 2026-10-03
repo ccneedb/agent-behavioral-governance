@@ -1,12 +1,12 @@
 ---
 doc_type: contributing
 project: information-environment-governance
-version: 0.2.0
-plugin_version: 0.7.0
+version: 0.3.0
+plugin_version: 0.8.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.7.0-scope-reset
+revision: 0.8.0-batch-2
 audience: contributors
 language: en
 ---
@@ -29,7 +29,7 @@ the product scope and the explicit out-of-scope list live in
 | Requirement | Why | Notes |
 |---|---|---|
 | Node.js **>= 20** | `package.json` `engines` | `node --test` is the test runner |
-| A DeepSeek Harness installation (`@deepseek-ai/dsh`) | The integration tests mount the **real** host services rather than mocks | Without it those tests **skip**; the unit and conformance suites still run. Declared peer range `>=0.2.0-rc.2 <0.3.0`; the verified release map lists `0.2.0-rc.2`, and the installed `0.2.1-alpha.1` baseline is pending re-capture |
+| A DeepSeek Harness installation (`@deepseek-ai/dsh`) | The integration tests mount the **real** host services rather than mocks | Without it those tests **skip**; the unit and conformance suites still run. Single supported baseline `0.2.1-alpha.1` (declared peer range `>=0.2.1-alpha.1 <0.3.0`, verified release map and committed baseline re-captured in 0.8.0). The retired `0.2.0-rc.2` baseline is **SUPERSEDED** |
 | `pnpm` (via `dsh plugin add`) | `scripts/verify.sh` performs a real install into a throwaway profile | Only needed for the full chain; the `dsh-ieg` lifecycle is npm-native |
 
 If your DSH installation is not at `/usr/local/lib/node_modules/@deepseek-ai/dsh`,
@@ -66,9 +66,8 @@ instead of restating them.
 ```bash
 ./scripts/check-docs.sh    # from the repository root: docs links, front matter, index coverage
 
-cd plugin
 npm run build              # compile src/**/*.ts into lib (also runs as pretest)
-npm run typecheck          # tsc --checkJs, strict, against the ambient seam contract
+npm run typecheck          # tsc, strict, against the ambient seam contract
 npm test                   # node --test — unit, conformance, and integration
 ./scripts/verify.sh        # the full evidence chain, including a real profile install
 ```
@@ -156,8 +155,8 @@ Part B and the acceptance matrix in its §32. In short:
 - semver; a change to compiled prompt text or to the durable record shape forces
   at least a minor bump and a changelog entry;
 - a new host release is added to `dsh.compatibility.dshReleases` only after the
-  compatibility baseline test passes and the baseline file is reviewed (the
-  installed `0.2.1-alpha.1` baseline is currently pending re-capture);
+  compatibility baseline test passes and the baseline file is reviewed. The
+  current single baseline is `0.2.1-alpha.1`, re-captured and reviewed in 0.8.0;
 - `scripts/verify.sh` must pass against the pinned host version;
 - `npm pack` must contain exactly the `files` allowlist, with no consumer-side
   build step: the package ships the compiled `lib/`, and the only build is the

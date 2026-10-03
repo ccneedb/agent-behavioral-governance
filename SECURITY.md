@@ -1,12 +1,12 @@
 ---
 doc_type: security-policy
 project: information-environment-governance
-version: 0.2.0
-plugin_version: 0.7.0
+version: 0.3.0
+plugin_version: 0.8.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.7.0-scope-reset
+revision: 0.8.0-batch-2
 audience: everyone
 language: en
 ---
@@ -45,7 +45,8 @@ capabilities:
 - general AI safety or security;
 - sandboxing;
 - authorization;
-- user-attention optimization;
+- user-attention optimization (**RETIRED** — the capability was withdrawn in
+  0.7.0; §Known limitations item 4 states the retirement);
 - unrelated agent behavior management.
 
 Any future feature must show a direct connection to Information Environment
@@ -101,7 +102,7 @@ Part B.
    unless the command wraps another command.
 3. `agent/pre-step` live dispatch is exercised by wiring and decision-shape
    tests, not by a full agent loop.
-4. **Question consolidation is no longer a capability at all.** The
+4. **Question consolidation is no longer a capability at all (RETIRED).** The
    `user-attention` module and failure class `FC-2.4` were removed in 0.7.0,
    classified Out of Scope / Externally Solved. There is no question ledger, no
    `userAttention` config key, and no question-batching gate; an `ask_user_question`

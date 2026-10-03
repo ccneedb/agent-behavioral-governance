@@ -1,3 +1,16 @@
+---
+doc_type: changelog
+project: information-environment-governance
+version: 0.8.0
+plugin_version: 0.8.0
+status: active
+owner: maintainers
+last_reviewed: 2026-10-03
+revision: 0.8.0-batch-2
+audience: everyone
+language: en
+---
+
 # Changelog
 
 > **Naming history.** This project was previously `dsh-agent-behavioral-governance`
@@ -64,13 +77,18 @@ not optimize the prompt.
   adapter observes seam facts against the committed baseline rather than branching on
   a version string — and none is added.
 - **Runtime authored in TypeScript.** `src/**/*.ts` is the source of truth and
-  `lib/**` is its build output (`tsconfig.build.json` now emits to `lib/`, not
-  `lib/`). Every runtime module migrated: the kernel, the four→three
+  `lib/**` is its build output (`tsconfig.build.json` now emits to `lib/`, not the
+  retired `lib/generated/`). Every runtime module migrated: the kernel, the four→three
   governance modules, the control plane, the prompt store and lifecycle, the CLI entry,
   and the aggregator `src/index.ts`. `lib/contract.d.ts` remains the one hand-authored
   ambient declaration file. No hand-maintained JavaScript remains in the runtime, and
   the compiled output is committed so a Git install is self-contained (pnpm does not
   run a build for a git dependency).
+- **Module descriptors now declare `version: '0.2.0'`.** The shipped
+  `project-governance`, `information-integrity`, and `workspace-governance`
+  descriptors had still carried `0.1.0`, contradicting the `0.2.0` module contracts
+  in `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` §24. The descriptors were brought to the
+  contract version, so one version is authoritative (closes §34.2 Q9).
 - **Repository metadata** names the renamed upstream repository
   (`ccneedb/dsh-information-environment-governance`) in `repository`, `homepage` and
   `bugs`.

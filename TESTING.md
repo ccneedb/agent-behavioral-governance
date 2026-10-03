@@ -1,12 +1,12 @@
 ---
 doc_type: testing-guide
 project: information-environment-governance
-version: 0.2.0
-plugin_version: 0.7.0
+version: 0.3.0
+plugin_version: 0.8.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.7.0-scope-reset
+revision: 0.8.0-batch-2
 audience: volunteers
 language: en
 ---
@@ -28,7 +28,7 @@ is a governance layer, not a sandbox, and it is not a security control.
 | Requirement | Notes |
 |---|---|
 | Node.js **>= 20** | the host and the tests both need it |
-| DeepSeek Harness (`dsh`) | declared peer range `>=0.2.0-rc.2 <0.3.0`; the compatibility release map verifies `0.2.0-rc.2`, and the host installed here is `0.2.1-alpha.1` (baseline re-capture is an open item — [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §4) |
+| DeepSeek Harness (`dsh`) | the single supported baseline is `0.2.1-alpha.1`: declared peer range `>=0.2.1-alpha.1 <0.3.0`, `dsh.compatibility.dshReleases` records that release as `verified`, and the committed baseline was re-captured against it ([`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4). The retired `0.2.0-rc.2` baseline is **SUPERSEDED** |
 | A **throwaway** DSH profile | never test in a profile you rely on |
 
 ## 2. Install
@@ -51,7 +51,7 @@ The host's own path also works and registers the profile bundle, but it forwards
 its arguments to **pnpm**:
 
 ```bash
-dsh plugin --profile ieg-test add "file:$PWD/plugin"
+dsh plugin --profile ieg-test add "file:$PWD"
 ```
 
 > **Command syntax gotcha.** Everything after `dsh plugin --profile <name>` is
@@ -137,7 +137,7 @@ which is otherwise indistinguishable from silence. Build it once and put it on
 `PATH`:
 
 ```bash
-cd plugin && npm run build
+npm run build
 export PATH="$PWD/bin:$PATH"
 
 dsh-ieg status                 # control status, generation, prompt and install/compose state

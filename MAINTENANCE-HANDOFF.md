@@ -1,23 +1,25 @@
 ---
 doc_type: maintenance-handoff
 project: information-environment-governance
-plugin_version: 0.7.0
-version: 0.7.0
+plugin_version: 0.8.0
+version: 0.8.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.7.0-scope-reset
-host_baseline_verified: dsh-0.2.0-rc.2
+revision: 0.8.0-batch-2
+host_baseline_verified: dsh-0.2.1-alpha.1
 supersedes: none
 language: en
 ---
 
 # IEG Maintenance Handoff
 
-> **This is the maintained status record (package 0.7.0).** §3–§4 are the single
+> **This is the maintained status record (package 0.8.0).** §3–§4 are the single
 > source of truth for current status and numbers; other documents link here rather
 > than restate them. §13 is **history** (the rename, the withdrawn capability, the
-> old→new gate mapping, and the `0.1.0`/v0.2.0 rounds).
+> old→new gate mapping, the `0.1.0`/v0.2.0 rounds, and the open-item closures).
+> §13 content is labelled **HISTORICAL** or **RETIRED** and is not a current
+> capability.
 
 > **Read this first.** IEG — the sanctioned short form for
 > `dsh-information-environment-governance` — is **not production-ready**; the open
@@ -41,16 +43,16 @@ The three enabled modules are `project-governance` (`FC-2.1`),
 `user-attention`/`FC-2.4` was removed in 0.7.0 — see §13.
 
 Out of scope, and not to be drifted into: general AI safety/security,
-sandboxing, authorization, user-attention optimization, and unrelated agent
-behavior management (authoritative statement: [`PRODUCT-SPEC.md`](PRODUCT-SPEC.md)
-§1.4).
+sandboxing, authorization, user-attention optimization (**RETIRED** — the
+capability was withdrawn in 0.7.0, §13.2), and unrelated agent behavior
+management (authoritative statement: [`PRODUCT-SPEC.md`](PRODUCT-SPEC.md) §1.4).
 
 | Path | What it is |
 |---|---|
 | [`PRODUCT-SPEC.md`](PRODUCT-SPEC.md) | positioning, scope, goals, requirements, success criteria |
 | [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md) | architecture; **Part A** verified host seams and deltas, **Part B** the target design and §32 gates |
 | [`IMPLEMENTATION-VALIDATION-HANDOFF.md`](IMPLEMENTATION-VALIDATION-HANDOFF.md) | retired — pointer to the §32 gates and the historical build order |
-| [`plugin/`](docs/PACKAGE-REFERENCE.md) | the implementation |
+| repository root | the implementation: `package.json` + `cordis.patch.yml` (the DSH bundle), `src/**` (TypeScript source of truth), `lib/**` (committed build output), `bin/ieg`, `test/`, `test-support/`, and `scripts/verify.sh`. There is no `plugin/` subdirectory |
 | [`eval/`](eval/README.md) | behavioural and end-to-end evaluation |
 
 ## 2. Run everything
@@ -76,12 +78,22 @@ two model-facing tools: `record_orientation` and `ieg_status`. It compiles
 **2,922 bytes**; the recorded ceiling is **3,215 bytes** (floor 1,400, hard cap
 4,096). Integration tests mount the real `dsh-system-prompt`, `dsh-tools`,
 `dsh-fs-local`, and the `dsh-storage`/`dsh-storage-json`/`dsh-storage-domain`
-stack — not mocks. **265 tests (all pass, no todo, no skip) and 22/22
-verification checks** were derived from the current tree on 2026-10-03, the first
-0.7.0 three-module round. Counts move with each round; re-derive them with
+stack — not mocks. **272 tests (all pass, no todo, no skip) and 22/22
+verification checks** were derived from the current tree on 2026-10-03, the 0.8.0
+three-module packaging round. Counts move with each round; re-derive them with
 `npm test` and `scripts/verify.sh`, and treat the numbers printed there —
-not this sentence — as current. (The 0.6.0 four-module round recorded 284 tests
-and 22/22 checks.)
+not this sentence — as current. (The 0.7.0 round recorded 265 tests, and the
+0.6.0 four-module round recorded 284 tests and 22/22 checks; both are
+**HISTORICAL**.)
+
+**Host baseline.** The single supported DSH baseline is **`0.2.1-alpha.1`**:
+`dsh.engines.dsh` is `>=0.2.1-alpha.1 <0.3.0`, `dsh.compatibility.dshReleases`
+records that one release as `verified`, and `lib/compatibility-baseline.json` was
+re-captured against it in 0.8.0 (section order and host prompt hash `ceb63ee5`
+identical to the previous baseline). The retired `0.2.0-rc.2` baseline is
+**SUPERSEDED**: it is gone from the peer range and the release map. There is no
+legacy compatibility layer; the adapter observes seam facts against the committed
+baseline rather than branching on a version string.
 
 **Durable state.** Governance state uses the `ctx.storageDomain` domain
 `ieg_governance` at `DOMAIN_VERSION` 1. State written under the pre-0.7.0 domain
@@ -145,13 +157,14 @@ Status as of the 0.7.0 scope-reset round (2026-10-03). A blocker marked
 3. **Not a publishable package (Gate I) — partial.** `LICENSE`, `CHANGELOG.md`,
    the `files` allowlist, and the narrowed peer range have landed; `"private":
    true` and the publish target remain until Gates C and D pass.
-4. **The compatibility baseline has not been re-captured for the installed host —
-   open.** The declared peer range is `>=0.2.0-rc.2 <0.3.0`, and
-   `dsh.compatibility.dshReleases` lists only `0.2.0-rc.2` as verified. The host
-   installed in this environment is **`0.2.1-alpha.1`**, which is in range but
-   **not** in the verified release map. Treating it as verified would be a claim
-   this round cannot support; re-capturing and reviewing the baseline is the open
-   action.
+4. **The compatibility baseline for the installed host — closed in 0.8.0.** The
+   declared peer range is now `>=0.2.1-alpha.1 <0.3.0`, and
+   `dsh.compatibility.dshReleases` records `0.2.1-alpha.1` as `verified`.
+   `lib/compatibility-baseline.json` was re-captured against the installed host
+   and reviewed; the ordered section names, the host prompt hash (`ceb63ee5`) and
+   the required capability set are identical to the previous baseline, so the
+   prompt surface is semantically unchanged. The retired `0.2.0-rc.2` baseline is
+   **SUPERSEDED** (closes §34.2 Q7 in the architecture spec).
 5. **`user-attention` behavioural validation — withdrawn, no longer a blocker.**
    This entry previously recorded a headless measurement block for the
    `user-attention` module and its scripted answerer. The module, failure class
@@ -179,6 +192,10 @@ Status as of the 0.7.0 scope-reset round (2026-10-03). A blocker marked
 
 ## 5. Architecture map
 
+`src/**/*.ts` is the source of truth; `lib/**` below is the committed `tsc` build
+output of it (see [`TYPESCRIPT-MIGRATION.md`](TYPESCRIPT-MIGRATION.md)). The tree
+shown is the **built** runtime the host actually loads.
+
 ```text
 lib/
 ├── index.js              Cordis entry: section, listeners, tool registration, wiring
@@ -193,6 +210,10 @@ lib/
 │   └── compatibility.js  host assembly observation + verdict
 └── modules/              the three governance modules (pure logic + descriptor)
 ```
+
+The corresponding sources are `src/index.ts`, `src/kernel/*.ts`, and
+`src/modules/*.ts`; `bin/ieg` is the host-required executable shim and the CLI
+source is `src/bin/ieg.ts`.
 
 Seams actually bound:
 
@@ -295,38 +316,36 @@ These each cost real time. Do not rediscover them.
 2. **Measure information integrity (Gate D)** — the invalidated-information
    scenario, scored on whether invalidated information stops being reused as
    authoritative.
-3. **Re-capture the compatibility baseline** for the installed host
-   `0.2.1-alpha.1` and review it before adding the release to
-   `dsh.compatibility.dshReleases`.
-4. **False-positive confirmation with real agents** — the simulated matrix shows
+3. **False-positive confirmation with real agents** — the simulated matrix shows
    `false_block_rate = 0`; only a model run can confirm it beyond the matrix.
-5. **Packaging close-out (Gate I)** — remove `private` and choose the publish
+4. **Packaging close-out (Gate I)** — remove `private` and choose the publish
    target once Gates C and D pass.
-6. **Orientation Consistency direction** — named terminology only (declared
+5. **Orientation Consistency direction** — named terminology only (declared
    constraints → observed actions → consistency/drift evaluation). **Not
    implemented in this batch**; do not build or promise it without a scope
    decision.
-7. **Retrieval-eligibility semantics** — named terminology only (existence,
+6. **Retrieval-eligibility semantics** — named terminology only (existence,
    status, authority, provenance, supersession, retrieval eligibility). **No
    retrieval system is built in this batch.**
 
 ## 9. Decisions waiting on the user
 
-Consolidated in `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` Part B. **Decided:** the
-non-intrusive defaults, the section order `8500` with its regression test, the
-`ask`-only gate with no IEG-registered answerer, and deferring to
-`dsh-agent-instructions`. **Still open:**
+Consolidated in `ARCHITECTURE-SPEC-AGENT-REFERENCE.md` Part B (§34.2). **Decided:**
+the non-intrusive defaults, the `ask`-only gate with no IEG-registered answerer,
+and deferring to `dsh-agent-instructions`. **Closed in 0.8.0:** the compatibility
+baseline re-capture (§4 item 4, Q7) and the module descriptor versions (Q9).
+**Still open:**
 
+- **Section order `8500`** — the code ships it and a regression test fixes it,
+  but the value itself is still to be confirmed as final (§34.2 Q2).
 - **Publish target** — registry, git, or local `file:` distribution for the
-  package once Gates C and D pass.
+  package once Gates C and D pass (§34.2 Q5).
 - **Live-profile rollout** — whether IEG is ever installed into the live `web`
-  profile (§10), and under what conditions; it currently is not.
-- **Compatibility baseline for `0.2.1-alpha.1`** — re-capture and review the
-  baseline before claiming the installed host as verified.
+  profile (§10), and under what conditions; it currently is not (§34.2 Q6).
 - **Control state is per-user, not per-profile** — `$IEG_STATE_FILE` /
   `$XDG_STATE_HOME` resolves once for the whole user, so two profiles on one host
   share one governance switch. Decide whether that is intended or whether the
-  control file must become profile-scoped.
+  control file must become profile-scoped (§34.2 Q8).
 
 ## 10. Why IEG does not appear in the plugin list
 
@@ -347,7 +366,7 @@ Two further reasons it would not appear anywhere else:
 To install it into the live profile (**not recommended while §4 is open**):
 
 ```bash
-dsh plugin --profile web add file:/home/hero/Deepseek-harness-0928/DSH-plugins/agent-behavioral-governance-pugin/plugin
+dsh plugin --profile web add file:/home/hero/Deepseek-harness-0928/DSH-plugins/agent-behavioral-governance-pugin
 ```
 
 ## 11. Resolved: `dsh-free-search` removal
@@ -376,17 +395,20 @@ changes with each run — measure it with `du -sh .` instead of trusting a numbe
 ├── SECURITY.md                           boundaries, known limitations, reporting
 ├── CONTRIBUTING.md                       process contract and the checks to run
 ├── CODE_OF_CONDUCT.md                    Contributor Covenant 2.1
-├── scripts/                              check-install.sh, check-docs.sh, ieg-npm.sh
-├── docs/                                 documentation index
-├── plugin/                               the implementation (source, tests, config)
-│   ├── lib/                              kernel and the three governance modules
-│   ├── test/                             unit, conformance, and integration suites
-│   ├── scripts/verify.sh                 the full evidence chain
-│   └── test-support/dsh.js               real-distribution test loader
+├── CHANGELOG.md                          release history (pre-0.7.0 keeps the ABG name)
+├── TYPESCRIPT-MIGRATION.md               build model, exceptions, migration history
+├── scripts/                              check-install.sh, check-docs.sh, ieg-npm.sh, verify.sh
+├── docs/                                 documentation index and package reference
+├── package.json / cordis.patch.yml       the DSH bundle manifest and patch — the root is the package
+├── src/                                  TypeScript source of truth (kernel, three modules, CLI)
+├── lib/                                  compiled runtime emitted from src/ (committed; no lib/generated/)
+├── bin/ieg                               host-required executable shim
+├── test/                                 unit, conformance, and integration suites
+├── test-support/dsh.js                   real-distribution test loader
 ├── eval/                                 behavioural and end-to-end evaluation
 │   ├── README.md                         method, metrics, process lessons
 │   ├── harness.mjs                       seed | prompt | measure | list
-│   ├── scenarios.mjs                     seeded scenarios and task prompts
+│   ├── scenarios.mjs                     seeded scenarios and task prompts (four scenarios)
 │   ├── e2e.mjs                           real-agent runs, re-installs first
 │   └── e2e-analyze.mjs                   ordering derived from tool/call events
 ├── .ieg-e2e/                             end-to-end overlays + throwaway DSH home
@@ -496,3 +518,26 @@ old D (user-attention efficiency) -> withdrawn
   reporting were removed and replaced by the terminal interface (then `abg`),
   the control record, and `prompt.md`. Its `PROMPT_VERSION` was unchanged because
   the compiled governance text was identical.
+- **0.8.0 (2026-10-03)** — the **DSH migration and packaging round** (the
+  repository root became the installable package; `plugin/` was removed; the host
+  baseline moved to `0.2.1-alpha.1`; the runtime finished migrating to TypeScript;
+  the retired `lib/generated/` output directory was removed). `PROMPT_VERSION` was
+  **unchanged at 0.3.0** and the compiled text is **byte-identical**: this round
+  deliberately did **not** optimize the prompt. The structural regression
+  `test/integration/packaging.test.js` was added, and `bounded-repair` (OBJ-3)
+  completed the evaluation scenario set.
+
+### 13.6 Open-item (Q) closures — no renumbering (0.8.0)
+
+`ARCHITECTURE-SPEC-AGENT-REFERENCE.md` §34.2 keeps its Q numbering. Two items
+closed in 0.8.0 and remain listed there as **decided** (the same convention as
+Q1/Q3/Q4), so no number disappeared and none was renumbered:
+
+```text
+Q7  compatibility baseline re-capture      -> CLOSED (single baseline 0.2.1-alpha.1)   §34.2, §4 item 4
+Q9  module descriptor version fields       -> CLOSED (descriptors now 0.2.0)           §34.2, §24
+Q2  section order 8500                     -> still OPEN
+Q5  publish target                         -> still OPEN
+Q6  live-profile rollout                   -> still OPEN
+Q8  control state per-user vs per-profile  -> still OPEN
+```

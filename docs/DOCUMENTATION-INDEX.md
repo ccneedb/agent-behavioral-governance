@@ -1,12 +1,12 @@
 ---
 doc_type: documentation-index
 project: information-environment-governance
-version: 0.2.0
-plugin_version: 0.7.0
+version: 0.3.0
+plugin_version: 0.8.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.7.0-scope-reset
+revision: 0.8.0-batch-2
 audience: everyone
 language: en
 ---
@@ -23,6 +23,25 @@ it was previously `dsh-agent-behavioral-governance` ("ABG"). Pre-0.7.0
 a changelog is immutable history; the rename and the withdrawal of the
 `user-attention` capability are recorded in
 [`MAINTENANCE-HANDOFF.md`](../MAINTENANCE-HANDOFF.md) §13.
+
+## Deciding what to keep (classification)
+
+A maintenance pass must decide *what a piece of text is*, not merely whether it
+sounds old. These labels are used across the documents when a reader could
+otherwise mistake history for the current design:
+
+| Label | Meaning | What to do |
+|---|---|---|
+| **CURRENT** | Authoritative statement of the shipped design. | No marking needed. |
+| **HISTORICAL** | True of an earlier round; kept so older references still make sense. | Mark it clearly as history. |
+| **SUPERSEDED** | Replaced by a named newer thing. | State what replaced it. |
+| **RETIRED** | Deliberately no longer a design; not a current or planned capability. | Make the retirement unmistakable. |
+| **REFERENCE** | A pointer to an external authority (a host document, a spec, a URL). | Link; do not restate. |
+| **REMOVE** | No remaining value. | Delete it. |
+
+"Outdated" is not a synonym for "must delete": a superseded number that still
+reads as a standing result is removed, while a superseded decision that explains
+why the current one exists stays and is labelled.
 
 ## Front-matter rule (stated once, applies everywhere)
 
@@ -59,6 +78,9 @@ pull-request body. Their owner and review date are recorded in the tables below.
 | [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) | code-of-conduct | How must participants behave? | everyone | maintainers | 2026-10-02 | active |
 | [`IMPLEMENTATION-VALIDATION-HANDOFF.md`](../IMPLEMENTATION-VALIDATION-HANDOFF.md) | implementation-handoff | Where did the original build order and acceptance gates go? | agents | maintainers | 2026-10-03 | retired — thin pointer |
 | [`docs/DOCUMENTATION-INDEX.md`](DOCUMENTATION-INDEX.md) | documentation-index | Which document owns which information? | everyone | maintainers | 2026-10-03 | active |
+| [`docs/PACKAGE-REFERENCE.md`](PACKAGE-REFERENCE.md) | implementation-readme | What does the package do, and how is it configured and installed? | implementers + operators | maintainers | 2026-10-03 | active |
+| [`TYPESCRIPT-MIGRATION.md`](../TYPESCRIPT-MIGRATION.md) | migration-record | Which sources are TypeScript, how the build works, and what is exempt? | contributors | maintainers | 2026-10-03 | active |
+| [`CHANGELOG.md`](../CHANGELOG.md) | changelog | What changed in each package release, and why? Pre-0.7.0 entries keep the historical name `dsh-agent-behavioral-governance` (ABG). | everyone | maintainers | 2026-10-03 | active |
 
 ## Auxiliary files (no front matter, by design)
 
@@ -70,14 +92,11 @@ pull-request body. Their owner and review date are recorded in the tables below.
 | [`.github/ISSUE_TEMPLATE/config.yml`](../.github/ISSUE_TEMPLATE/config.yml) | issue-form config | Which routes are offered instead of a blank issue? | maintainers | 2026-10-02 |
 | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI config | Which checks must pass? | maintainers | 2026-10-02 |
 
-Linked implementation documents, owned outside this documentation set and
-therefore not front-matter-governed here:
+Linked implementation documents that are deliberately **not** governed here (no
+front matter, no index-coverage rule):
 
 | File | doc_type | Position | Owner |
 |---|---|---|---|
-| [`docs/PACKAGE-REFERENCE.md`](../docs/PACKAGE-REFERENCE.md) | implementation-readme | What does the package do, and how is it configured and verified? | plugin maintainer |
-| [`TYPESCRIPT-MIGRATION.md`](../TYPESCRIPT-MIGRATION.md) | migration-record | Which plugin sources are TypeScript, how the build works, and what is exempt? | plugin maintainer |
-| [`CHANGELOG.md`](../CHANGELOG.md) | changelog | What changed in each package release, and why? Pre-0.7.0 entries keep the historical name `dsh-agent-behavioral-governance` (ABG). | plugin maintainer |
 | [`eval/README.md`](../eval/README.md) | evaluation-readme | How is behavioural effect measured, and what are the metrics? | evaluation owner |
 
 ## Single sources of truth

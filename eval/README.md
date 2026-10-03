@@ -85,7 +85,7 @@ therefore holds only the two overlay files — `ieg-config.yml` (treatment) and
 cd <repository root>
 export DSH_HOME=$PWD/.ieg-e2e/dsh-home
 dsh --profile iege2e --from-default-profile headless --dump-config   # throwaway profile
-dsh plugin --profile iege2e add "file:$PWD/plugin"                   # install IEG
+dsh plugin --profile iege2e add "file:$PWD"                       # install IEG (repository root)
 cp /home/hero/.dsh/.credentials.yaml "$DSH_HOME/.credentials.yaml"   # stage credentials
 chmod 600 "$DSH_HOME/.credentials.yaml"
 node eval/e2e.mjs 4 auth-doc-request

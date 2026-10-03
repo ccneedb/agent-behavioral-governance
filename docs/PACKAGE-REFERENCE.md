@@ -1,3 +1,16 @@
+---
+doc_type: implementation-readme
+project: information-environment-governance
+version: 0.8.0
+plugin_version: 0.8.0
+status: active
+owner: maintainers
+last_reviewed: 2026-10-03
+revision: 0.8.0-batch-2
+audience: implementers + operators
+language: en
+---
+
 # dsh-information-environment-governance
 
 **Information Environment Governance (IEG)** — an additive governance layer for the
@@ -8,14 +21,19 @@ This is a **verifiable prototype** of the design specified in
 [`../PRODUCT-SPEC.md`](../PRODUCT-SPEC.md),
 [`../ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](../ARCHITECTURE-SPEC-AGENT-REFERENCE.md)
 (notably the source-verified §17), and
-[`../IMPLEMENTATION-VALIDATION-HANDOFF.md`](../IMPLEMENTATION-VALIDATION-HANDOFF.md).
+[`../IMPLEMENTATION-VALIDATION-HANDOFF.md`](../IMPLEMENTATION-VALIDATION-HANDOFF.md)
+(a **RETIRED** pointer; its content now lives in the architecture spec's §32 gates
+and Part B).
 
-- Package: `dsh-information-environment-governance`, version `0.7.0`, `"private": true`,
+- Package: `dsh-information-environment-governance`, version `0.8.0`, `"private": true`,
   MIT, **ESM**, **zero runtime dependencies**, Node `>=20`.
 - CLI: `dsh-ieg` (`bin/ieg`; the interface is authored in `src/bin/ieg.ts` and
   compiled to `lib/bin/ieg.js`).
 - It contributes **exactly one** additive system-prompt section (`ieg:governance`)
   and binds deterministic enforcement to verified host seams.
+- The repository root **is** the package: `package.json` and `cordis.patch.yml`
+  live there, with `src/**/*.ts` as the source of truth and `lib/**` as the
+  committed `tsc` build output. There is no `plugin/` subdirectory.
 
 The package has no first-party and no third-party import at runtime, so it mounts in
 any composition and is immune to the profile's module-resolution layout.
@@ -38,9 +56,10 @@ There are **two governance entry points**:
 way to make document quality checkable — **not a sandbox or security system.**
 
 **Explicitly out of scope:** general AI safety/security, sandboxing, authorization,
-user-attention optimization, and unrelated agent behavior management.
+user-attention optimization (**RETIRED** — the capability was withdrawn in 0.7.0;
+see below), and unrelated agent behavior management.
 
-### Removed in 0.7.0: user-attention
+### Removed in 0.7.0: user-attention (**RETIRED history**)
 
 The `user-attention` module and its question ledger were **removed in 0.7.0**. Their
 classification is **"Out of Scope / Externally Solved"**: testing found a stable
@@ -166,7 +185,7 @@ control-plane prompt.md                                 (highest)
 ## Configuration
 
 All configuration lives on the single composition row inserted by
-[`cordis.patch.yml`](cordis.patch.yml). A patch replaces the whole `config` of a row,
+[`../cordis.patch.yml`](../cordis.patch.yml). A patch replaces the whole `config` of a row,
 so an override restates the fields it needs.
 
 ```yaml
@@ -315,10 +334,10 @@ steps.
 ### npm-native path (no pnpm required)
 
 From a clone, with `npm`, `node` (>= 20), and `dsh` on `PATH` — the command is
-`dsh-ieg` (`bin/ieg`, or `npm link` from `plugin/`):
+`dsh-ieg` (`bin/ieg`, or `npm link` from the repository root):
 
 ```bash
-# install (packs this repository's plugin/ with `npm pack`)
+# install (packs this repository with `npm pack`)
 dsh-ieg install --profile ieg-test
 
 # or install a release tarball you downloaded (the version is package.json's)
@@ -388,7 +407,6 @@ model-backed gates pass (`ARCHITECTURE-SPEC` §31.1, §34.2 Q5).
 ## Verification
 
 ```bash
-cd plugin
 npm run build         # src/**/*.ts -> lib (the artifacts the host loads)
 npm test              # node --test (unit + conformance + integration)
 ./scripts/verify.sh   # the full evidence chain, real profile install
@@ -456,9 +474,13 @@ Honest boundaries:
   revision, which no longer exists; that evidence was deleted as superseded rather than
   kept beside results for different text. The next `eval/e2e.mjs` run against this
   plugin is what produces a valid number. See [`../eval/README.md`](../eval/README.md).
-- **Host baseline range.** The declared range is `dsh >=0.2.0-rc.2 <0.3.0`. The
-  compatibility release map still lists only `0.2.0-rc.2` as verified, while the host
-  installed here is `0.2.1-alpha.1`; that version is **not** covered by the map. This is
-  an **open item**, not a verified claim.
+- **Host baseline range.** The single supported baseline is `dsh 0.2.1-alpha.1`: the
+  declared range is `dsh >=0.2.1-alpha.1 <0.3.0`, and
+  `dsh.compatibility.dshReleases` lists that one release as `verified`. The retired
+  `0.2.0-rc.2` baseline is **SUPERSEDED**: it is no longer in the peer range or the
+  release map, and the committed baseline was re-captured against the installed
+  `0.2.1-alpha.1` host (identical section order and host prompt hash `ceb63ee5`).
+  There is no legacy compatibility layer; the adapter observes seam facts against
+  the committed baseline rather than branching on a version string.
 - **Packaging (Gate I) is partial.** The package remains `"private": true` and is not
   published to a registry; only the GitHub release tarball is a supported channel.

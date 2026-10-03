@@ -1,13 +1,13 @@
 ---
 doc_type: readme
 project: information-environment-governance
-version: 0.3.0
-plugin_version: 0.7.0
+version: 0.4.0
+plugin_version: 0.8.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.7.0-scope-reset
-verified_against: dsh-v0.2.0-rc.2
+revision: 0.8.0-batch-2
+verified_against: dsh-v0.2.1-alpha.1
 language: en
 format_note: conservative-machine-readable-markdown
 ---
@@ -26,7 +26,7 @@ in [`PRODUCT-SPEC.md` §1](PRODUCT-SPEC.md#1-product-positioning); this README
 links there rather than restating them.
 
 > **Status: prototype, not production-ready.** The package is
-> `dsh-information-environment-governance` **0.7.0**, `"private": true`, and the
+> `dsh-information-environment-governance` **0.8.0**, `"private": true`, and the
 > publish target is undecided. Behavioural improvement (Gate C) and information
 > integrity (Gate D) have no valid measurement for the current prompt revision,
 > and packaging (Gate I) is partial. It is not recommended for a working
@@ -49,7 +49,7 @@ plugin.
 | `IMPLEMENTATION-VALIDATION-HANDOFF.md` | agents | retired — a pointer to the §32 gates and the historical build order |
 | `docs/DOCUMENTATION-INDEX.md` | everyone | the document inventory and the single-source-of-truth map |
 | `.github/ISSUE_TEMPLATE/` | users + maintainers | the bug-report and feature-request forms a deviation report uses |
-| `plugin/` | implementation agents | the working `dsh-information-environment-governance` prototype: kernel, three modules, the `dsh-ieg` terminal interface, and the verification chain |
+| repository root (`package.json`, `cordis.patch.yml`, `src/`, `lib/`, `bin/ieg`) | implementation agents | the working `dsh-information-environment-governance` package: manifest, kernel, three modules, the `dsh-ieg` terminal interface, and the verification chain. **The root *is* the package** — there is no `plugin/` subdirectory |
 | `eval/` | evaluation agents | behavioural and end-to-end evaluation: the harness, the seeded scenarios, and the sandbox runs |
 
 ## What IEG governs
@@ -82,7 +82,8 @@ them:
 - general AI safety or security;
 - sandboxing;
 - authorization;
-- user-attention optimization;
+- user-attention optimization (**RETIRED** — the capability was withdrawn in 0.7.0;
+  see the history in [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §13.2);
 - unrelated agent behavior management.
 
 Any future feature must show a direct connection to Information Environment
@@ -158,7 +159,7 @@ configuration, the `files` allowlist, and package verification — is in
 flow.
 
 ```bash
-PLUGIN=/path/to/this/repository/plugin
+PLUGIN=/path/to/this/repository
 dsh-ieg install   --profile <your-test-profile>          # npm lifecycle + bundle registration
 dsh-ieg install   --profile <your-test-profile> --from <tarball-or-dir>
 dsh-ieg status    --profile <your-test-profile>          # package, control and composed-row state
@@ -185,11 +186,12 @@ Two caveats worth knowing before first use:
   keep the non-intrusive `requireBeforeMutation: false` default.
 
 Requirements: Node.js >= 20 and a DeepSeek Harness installation. The declared
-peer range is `>=0.2.0-rc.2 <0.3.0`; the compatibility release map currently
-lists only `0.2.0-rc.2` as verified, and the host installed in this environment
-is `0.2.1-alpha.1`, whose baseline has **not** been re-captured. That is an open
-item, not a verified claim — see
-[`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §4.
+peer range is `>=0.2.1-alpha.1 <0.3.0`, and `dsh.compatibility.dshReleases`
+records that single baseline as `verified`; the committed baseline was
+re-captured against the installed `0.2.1-alpha.1` host in 0.8.0 (identical section
+order and host prompt hash). The retired `0.2.0-rc.2` baseline is **SUPERSEDED**
+and is no longer in the range or the release map. See
+[`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4.
 
 ### Volunteer testing
 
@@ -218,7 +220,11 @@ CODE_OF_CONDUCT.md                    Contributor Covenant 2.1
 LICENSE                               MIT
 docs/                                 the documentation index and single-source-of-truth map
 scripts/                              repository tooling (check-install.sh, check-docs.sh, ieg-npm.sh)
-plugin/                               the implementation, the dsh-ieg CLI, and its test suite
+package.json / cordis.patch.yml       the DSH bundle manifest and patch (the root is the package)
+src/                                  the TypeScript source of truth for the runtime
+lib/                                  the compiled runtime `tsc` emits from src/ (committed)
+bin/ieg                               the `dsh-ieg` executable shim
+test/ test-support/                   unit, conformance, and integration suites
 eval/                                 the behavioural evaluation harness
 .github/                              CI, issue forms, and the pull-request template
 ```
@@ -242,14 +248,17 @@ installation is present. Point the loader at a non-default install with
 
 ## Working prototype
 
-`plugin/` contains an installable **`dsh-information-environment-governance`**
-`0.7.0` (`"private": true`, unpublished) that realizes the architecture above
+The repository root **is** an installable **`dsh-information-environment-governance`**
+`0.8.0` (`"private": true`, unpublished) that realizes the architecture above
 with zero runtime dependencies. It contributes one additive prompt section and
 enforces through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
 `ctx.storageDomain`; it reports its own state through a bounded runtime-context
 status line plus the `record_orientation` and read-only `ieg_status` tools; and
 it ships the `dsh-ieg` terminal interface for control
 (`start`/`pause`/`restart`/`exit`), `prompt.md` editing, and the npm lifecycle.
+The runtime is authored in TypeScript under `src/**`; `lib/**` is its committed
+`tsc` build output (see
+[`TYPESCRIPT-MIGRATION.md`](TYPESCRIPT-MIGRATION.md)).
 
 The evidence chain — run per [`CONTRIBUTING.md`](CONTRIBUTING.md) §Running the
 checks — covers strict typechecking, the full test suite (no todo, no skip; unit,
@@ -282,9 +291,9 @@ re-run rather than superseded numbers.
    stale number still reads as a standing result.
 2. **Decisions are open**, consolidated in
    [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §9: the publish target, any
-   live-profile rollout, re-capturing the compatibility baseline for
-   `0.2.1-alpha.1`, and the control state file being per-user rather than
-   per-profile.
+   live-profile rollout, and the control state file being per-user rather than
+   per-profile (Q8). The compatibility-baseline re-capture (Q7) closed in 0.8.0:
+   the single supported baseline is `dsh 0.2.1-alpha.1`.
 3. **`private: true` is retained** until 1 and 2 are resolved; removing it is the
    release action.
 
