@@ -164,7 +164,7 @@ ONE IEG section + DSH first-party sections
           host prompt assembly
 ```
 
-The three modules of `0.7.0` aggregate into one section; the composition row stays
+The three shipped modules (§24) aggregate into one section; the composition row stays
 **one** (`id: ieg`). The plugin must not use `complete: true`.
 
 ## 5. Component Model
@@ -268,8 +268,9 @@ module were withdrawn in `0.7.0` (§23.2).
 
 ## 7. Module Specifications
 
-> **Note.** `0.7.0` ships three module specifications, §7.1–§7.3. Section 7.4
-> (`user-attention`) was withdrawn in `0.7.0`; the withdrawal record is §23.2.
+> **Note.** The current package ships three module specifications, §7.1–§7.3.
+> Section 7.4 (`user-attention`) was withdrawn in `0.7.0`; the withdrawal record
+> is §23.2.
 
 ### 7.1 `project-governance`
 
@@ -434,10 +435,10 @@ Rules:
 
 Detailed state belongs in runtime structures, and deterministic checks belong in hooks.
 
-> **Recorded footprint (`0.7.0`).** The folded three-module section measures
-> **2,922 bytes**; the derived ceiling is **3,215 bytes** (floor 1,400, hard cap
-> 4,096). The rule that derives and enforces that budget is §27; current status
-> and numbers are maintained once in
+> **Recorded footprint (`0.8.0`; unchanged from `0.7.0`).** The folded
+> three-module section measures **2,922 bytes**; the derived ceiling is
+> **3,215 bytes** (floor 1,400, hard cap 4,096). The rule that derives and
+> enforces that budget is §27; current status and numbers are maintained once in
 > [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3.
 
 ## 12. Diagnostics
@@ -503,12 +504,12 @@ prompt versions
 state-schema versions
 ```
 
-The shipped `0.7.0` artifact versions are:
+The shipped `0.8.0` artifact versions are:
 
 ```text
-artifact                      field                    0.7.0 value
+artifact                      field                    0.8.0 value
 ──────────────────────────────────────────────────────────────────────
-package                       package.json `version`   0.7.0 (`private: true`)
+package                       package.json `version`   0.8.0 (`private: true`)
 compiled prompt               PROMPT_VERSION           0.3.0
 governance state              DOMAIN_VERSION           1
 module semantics              `module.version`         0.2.0 in the three shipped
@@ -936,9 +937,11 @@ governance state              `DOMAIN_VERSION`                any change to the 
 module semantics              `module.version`                any change to a module contract
 ```
 
-At the `0.7.0` scope reset the values are: package `0.7.0` (`private: true`),
-`PROMPT_VERSION` `0.3.0`, `DOMAIN_VERSION` `1`, and the three shipped module
-descriptors `0.1.0` while §24 states their v0.2.0 contracts (§34.2 Q9).
+At the `0.8.0` packaging round the values are: package `0.8.0` (`private: true`),
+`PROMPT_VERSION` `0.3.0` (unchanged — the compiled text is byte-identical),
+`DOMAIN_VERSION` `1`, and the three shipped module descriptors `0.2.0`, matching
+§24 (§34.2 Q9, closed). The earlier `0.7.0` values (package `0.7.0`, descriptors
+`0.1.0`) are **HISTORICAL**.
 
 Rules:
 
@@ -1135,17 +1138,21 @@ tests        transition table, promotion gate, resume/fork recovery
 **`workspace-governance` — 0.2.0**
 
 ```text
-state        authorized[], observed[], blocked[]
+state        stateless — pure classify/decide/guard functions over the call and
+             the `workspace` config (src/modules/workspace-governance.ts). The
+             earlier authorized[]/observed[]/blocked[] ledger is SUPERSEDED and
+             is not shipped.
 enforcement  tools/pre-execute classify + gate on file-effect tools;
              shell writes classified from command text, quoted text as data
              unless the command wraps another command (D13 amendment);
              ctx.tools.guard monotonic deny backstop;
              document-overlap gate (body similarity, identical H1, filename
              subject, prefix matching)
-observation  fs/write-intent and fs/edit-intent record the concrete target when
-             the composition dispatches them — config-gated, must call next(),
-             and must be registered ahead of dsh-fs-observation-policy, whose
-             first-wins slot never calls next() (§17.4)
+observation  the fs/write-intent, fs/edit-intent and fs/observed seams are
+             verified host facts (§17.4), but the shipped plugin registers no
+             listener on them: the concrete target is taken from the tool
+             arguments instead. The intent-observation design described here in
+             earlier revisions is RETIRED, not a current binding.
 boundary     tool-mediated mutations only (A4); direct ctx.fs writes are not
              covered and IEG does not claim process-wide coverage
 tests        classification, guard ordering, overlap detector, real-fs
@@ -1174,7 +1181,8 @@ durable state   ctx.storageDomain table 'sessions', keyed by session id
   `payload.agent`, `tools/pre-execute` `exec.agent`, `tools/result`, and the
   `fs/*` actor.
 - `AgentGovernanceState = {orientation}` — verified against
-  `lib/kernel/state.js`, whose `createAgentState()` returns exactly that.
+  `src/kernel/state.ts` (compiled to `lib/kernel/state.js`), whose
+  `createAgentState()` returns exactly that.
   There is no question ledger, workspace ledger, or information ledger in live
   state; those rows were removed in `0.7.0` (§23.2).
 - Hydration: the first seam touch for an agent performs one `load(sessionId)`;
@@ -1202,8 +1210,8 @@ This is a deliberate deviation from §17.7 and is listed for confirmation in
 
 ### 25.4 Durable schema
 
-Verified against `lib/kernel/durability.js` and
-`lib/kernel/orientation.js`:
+Verified against `src/kernel/durability.ts` and
+`src/kernel/orientation.ts` (compiled to `lib/kernel/`):
 
 ```text
 domain { name: 'ieg_governance', version: 1, layout: 'per-record' }

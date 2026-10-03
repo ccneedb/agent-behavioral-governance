@@ -108,8 +108,13 @@ reason the project is as small as it is:
 7. **Attribute every prompt change.** A change to the compiled prompt text
    requires `PROMPT_VERSION` to change and a [`CHANGELOG.md`](CHANGELOG.md)
    entry naming the problem or evaluation result that motivated it.
-8. **Do not commit regenerable artifacts or credentials.** `.gitignore` covers
-   the known ones; if you find a new one, add it there rather than committing it.
+8. **Do not commit regenerable artifacts or credentials — with one deliberate
+   exception.** `.gitignore` covers the known regenerable trees (`.ieg-verify/`,
+   `.pnpm-store/`, `eval/runs/`, result JSON); if you find a new one, add it there
+   rather than committing it. The **compiled runtime `lib/**` is the exception**:
+   it is committed so a Git install is self-contained, because pnpm does not run a
+   build for a git dependency. Never edit it by hand — build it from `src/**`
+   ([`TYPESCRIPT-MIGRATION.md`](TYPESCRIPT-MIGRATION.md) §2.2).
 9. **Stay inside the declared scope.** General safety/security, sandboxing,
    authorization, user-attention optimization, and unrelated agent behavior
    management are out of scope; a new feature must show a direct connection to
