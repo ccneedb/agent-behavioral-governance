@@ -2,11 +2,11 @@
 doc_type: product-spec
 project: information-environment-governance
 version: 0.5.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 verified_against: dsh-v0.2.1-alpha.1
 language: en
 host_target: deepseek-harness
@@ -25,7 +25,7 @@ document links here rather than restating it
 **Information Environment Governance (IEG)** is an additive
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin. The
 package is `dsh-information-environment-governance`, version **0.8.0**, MIT
-licensed and `"private": true`. It supplements the host system prompt and
+licensed, publishable and not yet published. It supplements the host system prompt and
 runtime with project-work governance.
 
 It is not a replacement system prompt, a second agent identity, a generic prompt

@@ -2,11 +2,11 @@
 doc_type: migration-record
 project: information-environment-governance
 version: 1.0.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 audience: contributors
 language: en
 ---
@@ -296,7 +296,7 @@ trusting this sentence, and see [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.m
 ```console
 $ npm run typecheck          # tsc against the ambient contract, tsconfig.json  → exit 0
 $ npm test                   # pretest builds, then node --test                → 272 pass, 0 fail
-$ ./scripts/verify.sh        # the full evidence chain                         → 22/22 checks passed
+$ ./scripts/verify.sh        # the full evidence chain                         → 27/27 checks passed
 $ npm pack                   # prepack asserts the artifacts, pack ships lib/**
 ```
 
@@ -307,7 +307,7 @@ Three independent checks back the claim that the package still works:
   (The migration slice recorded 284 tests against the then-current tree; that
   number is **HISTORICAL**, and the 0.7.0 withdrawal removed the tests that
   carried the difference.)
-- **`verify.sh` 22/22** — step 1 runs `npm run build` before the typecheck and
+- **`verify.sh` 27/27** — step 1 runs `npm run build` before the typecheck and
   tests, so a fresh checkout regenerates the artifacts first. The installed-artifact
   check imports the **installed** copy's `lib/index.js` (a real directory in a
   throwaway profile, not a link back to the source tree), applies the **installed

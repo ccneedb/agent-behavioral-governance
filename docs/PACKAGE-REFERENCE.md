@@ -2,11 +2,11 @@
 doc_type: implementation-readme
 project: information-environment-governance
 version: 0.8.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 audience: implementers + operators
 language: en
 ---
@@ -25,7 +25,8 @@ This is a **verifiable prototype** of the design specified in
 (a **RETIRED** pointer; its content now lives in the architecture spec's §32 gates
 and Part B).
 
-- Package: `dsh-information-environment-governance`, version `0.8.0`, `"private": true`,
+- Package: `dsh-information-environment-governance`, version `0.9.1` (publishable,
+  not published),
   MIT, **ESM**, **zero runtime dependencies**, Node `>=20`.
 - CLI: `dsh-ieg` (`bin/ieg`; the interface is authored in `src/bin/ieg.ts` and
   compiled to `lib/bin/ieg.js`).
@@ -331,10 +332,16 @@ the `ieg` row. Plain `npm install` does not know about it, so an npm-only instal
 leaves the package on disk but **not mounted**. The `dsh-ieg` lifecycle performs both
 steps.
 
-### npm-native path (no pnpm required)
+### npm-native path (post-install; no pnpm required)
 
-From a clone, with `npm`, `node` (>= 20), and `dsh` on `PATH` — the command is
-`dsh-ieg` (`bin/ieg`, or `npm link` from the repository root):
+This lifecycle manages an **already-installed** package: `dsh-ieg` is supplied by
+IEG itself, so it cannot bootstrap the plugin. On a clean machine install through
+DSH first ([`../README.md`](../README.md) §Install). The command is also installed
+into the profile rather than onto `PATH`, so run it as
+`"$DSH_HOME/profiles/<profile>/node_modules/.bin/dsh-ieg"`, install the package
+globally once it is published
+(`npm install -g dsh-information-environment-governance`), or `npm link` from the
+repository root. With a command available, the lifecycle is:
 
 ```bash
 # install (packs this repository with `npm pack`)
@@ -397,7 +404,7 @@ the switch, so delete the lockfile you no longer use.
 
 ### npm registry publication
 
-**Not authorised.** The package is `"private": true` and is not published to the npm
+**Not authorised.** The package is publishable but is not published to the npm
 registry; `npm install <name>` from a registry therefore does not work today.
 Distribution is the release tarball (or a clone). `npm pack` remains the canonical
 artifact producer, and the release workflow builds and attaches that tarball. Removing
@@ -482,5 +489,5 @@ Honest boundaries:
   `0.2.1-alpha.1` host (identical section order and host prompt hash `ceb63ee5`).
   There is no legacy compatibility layer; the adapter observes seam facts against
   the committed baseline rather than branching on a version string.
-- **Packaging (Gate I) is partial.** The package remains `"private": true` and is not
+- **Packaging (Gate I) is partial.** The package is publishable but is not
   published to a registry; only the GitHub release tarball is a supported channel.

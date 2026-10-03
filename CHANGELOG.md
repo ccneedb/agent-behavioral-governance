@@ -1,12 +1,12 @@
 ---
 doc_type: changelog
 project: information-environment-governance
-version: 0.9.0
-plugin_version: 0.9.0
+version: 0.9.1
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 audience: everyone
 language: en
 ---
@@ -32,6 +32,57 @@ motivated it**. IEG records a prompt revision in four places, and an entry below
 names the one it changes: the package `version`, the enforced
 `dsh.engines.dsh` range, `dsh.compatibility.dshReleases`, `PROMPT_VERSION`, and
 the governance state `DOMAIN_VERSION` (§22.3).
+
+## [0.9.1] — 2026-10-03
+
+**Distribution and installation-path repair.**
+
+### Fixed
+
+- **The installation instructions contradicted themselves.** They told a user to
+  run `dsh-ieg install …` as the first step, but `dsh-ieg` is supplied *by* the
+  package — on a clean machine that command is `bash: dsh-ieg: command not found`,
+  which is exactly what a user hit. Every documented first-install flow now uses
+  the host's own installer, and `dsh-ieg` is documented strictly as a
+  **post-install** management interface.
+- **The CLI's real invocation is now documented.** pnpm installs `dsh-ieg` into
+  the profile rather than onto `PATH`, so the dependable command is
+  `"$DSH_HOME/profiles/<profile>/node_modules/.bin/dsh-ieg"`; a global npm install
+  or `npx dsh-ieg` are the alternatives.
+
+### Changed
+
+- **The package is publishable.** `private` is removed and
+  `publishConfig.access` is `public`; keywords now carry `dsh-plugin`,
+  `information-environment` and `dsh-bundle`. Publication itself remains a
+  maintainer release action, withheld pending Gates C and D and the publish-target
+  decision (§34.2 Q5) — the registry name `dsh-information-environment-governance`
+  is currently unclaimed, and this changelog does not claim npm availability.
+- **Discovery uses the ecosystem's existing mechanism** rather than an invented
+  one: npm keywords plus the repository's GitHub topics (`dsh-plugin`, `dsh`,
+  `deepseek-harness`, `information-environment`). The installed DSH exposes no
+  marketplace protocol to implement; its plugin manager accepts a registry name,
+  an absolute path, a git address or a tarball.
+- **Version information consolidated.** `package.json` and `PLUGIN_VERSION` both
+  read `0.9.1`; the declared peer range is documented as a compatibility
+  statement, not a tested-versions list (exactly one release, `0.2.1-alpha.1`, is
+  verified). Front matter across the documents was realigned.
+
+### Added
+
+- **The release gate now verifies the distribution path**: `scripts/verify.sh`
+  packs the artifact with `npm pack`, installs **that tarball** into a fresh
+  throwaway profile through the DSH-native command, asserts the `ieg` row
+  composes, and asserts the shipped runtime, bundle patch and profile-local
+  `dsh-ieg` command are present. 27 checks in total, up from 22.
+- **A verified installation procedure for agents and operators** in
+  `CONTRIBUTING.md`, stating the install order, forbidding wrappers that bootstrap
+  through `dsh-ieg`, and recording the discovery and claim rules.
+
+### Notes
+
+- No runtime governance behaviour changed: the compiled prompt and
+  `PROMPT_VERSION` `0.4.0` are untouched, and no new scope was introduced.
 
 ## [0.9.0] — 2026-10-03
 
@@ -115,13 +166,14 @@ decision).
 - The package version, `PROMPT_VERSION` and the prompt byte figures were swept
   across the documents so no page describes the previous prompt revision.
 
-> **Release status.** `package.json` declares `version: "0.9.0"` and keeps
-> `"private": true`, and `dsh.engines.dsh` is narrowed to the current verified range
-> (`>=0.2.1-alpha.1 <0.3.0`). The version records the capability set; the removal of
-> `private` and the publish target (§34.2 Q5) remain open until the behavioural and
-> information-integrity gates (C, D) are met. `0.9.0` is therefore published as a
-> **GitHub release for volunteer testing** (a tag plus a packed tarball), not as an
-> npm package: the older entries stay staged under **Unreleased** below.
+> **Release status.** `package.json` declares `version: "0.9.1"`, is **publishable**
+> (no `private` flag, `publishConfig.access: "public"`) and is **not published** to
+> npm; `dsh.engines.dsh` is narrowed to the current verified range
+> (`>=0.2.1-alpha.1 <0.3.0`). The publish target (§34.2 Q5) stays open until the
+> behavioural and information-integrity gates (C, D) are met. Each release is
+> published as a **GitHub release for volunteer testing** (a tag plus a packed
+> tarball) — that is the developer/recovery source, not the normal user install
+> path; the older entries stay staged under **Unreleased** below.
 
 ## [0.8.0] — 2026-10-03
 

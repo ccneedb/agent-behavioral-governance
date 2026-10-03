@@ -2,11 +2,11 @@
 doc_type: architecture-spec
 project: information-environment-governance
 version: 0.8.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 part_a: verified-host-integration-and-prototype-0.1.0
 part_b: target-design-baseline-0.2.0-extended-through-0.8.0
 part_b_status: implemented-through-the-0.8.0-packaging-round; model-backed-gates-C-and-D-pending
@@ -504,12 +504,12 @@ prompt versions
 state-schema versions
 ```
 
-The shipped `0.9.0` artifact versions are:
+The shipped `0.9.1` artifact versions are:
 
 ```text
-artifact                      field                    0.9.0 value
+artifact                      field                    0.9.1 value
 ──────────────────────────────────────────────────────────────────────
-package                       package.json `version`   0.9.0 (`private: true`)
+package                       package.json `version`   0.9.1 (publishable; not published)
 compiled prompt               PROMPT_VERSION           0.4.0
 governance state              DOMAIN_VERSION           1
 module semantics              `module.version`         0.2.0 in the three shipped
@@ -840,7 +840,7 @@ A working prototype of this specification lives at the repository root (see
 `dsh-information-environment-governance`, now `0.8.0`. It exists to make the §17
 seam bindings falsifiable rather than merely asserted.
 
-> **v0.2.0 addendum (HISTORICAL — the package has since moved to `0.8.0`; the
+> **v0.2.0 addendum (HISTORICAL — the package has since moved to `0.9.1`; the
 > contract recorded here is unchanged).** At that revision the plugin was
 > `version: 0.2.0` (still `"private": true`).
 > Per-agent state, the diagnostics channels, the compatibility adapter, the
@@ -937,7 +937,7 @@ governance state              `DOMAIN_VERSION`                any change to the 
 module semantics              `module.version`                any change to a module contract
 ```
 
-At the `0.8.0` packaging round the values are: package `0.8.0` (`private: true`),
+At the `0.8.0` packaging round the values **were**: package `0.8.0` (`private: true`),
 `PROMPT_VERSION` `0.3.0` (unchanged — the compiled text is byte-identical),
 `DOMAIN_VERSION` `1`, and the three shipped module descriptors `0.2.0`, matching
 §24 (§34.2 Q9, closed). The earlier `0.7.0` values (package `0.7.0`, descriptors
@@ -1702,11 +1702,11 @@ returns no question-batch decision (§8).
 
 ### 31.1 Package
 
-| Item | 0.8.0 |
+| Item | 0.9.1 |
 |---|---|
-| package | `dsh-information-environment-governance`, `version: 0.8.0`, `private: true`; `bin: { "dsh-ieg": "bin/ieg" }` |
+| package | `dsh-information-environment-governance`, `version: 0.9.1`; `bin: { "dsh-ieg": "bin/ieg" }` |
 | repository | the repository root **is** the package; there is no `plugin/` subdirectory (removed in 0.8.0) |
-| `private` | **retained** in the working tree until Gates C and D pass; removal is the release action |
+| `private` | **removed** (Batch 4): the package is publishable. Publication itself stays the release action, withheld until Gates C and D pass and §34.2 Q5 is decided |
 | `license` | `MIT`, with `LICENSE` |
 | `CHANGELOG.md` | required; every prompt change attributed to a problem or an evaluation result |
 | `files` | `lib`, `bin`, `cordis.patch.yml`, `README.md`, `LICENSE`, `CHANGELOG.md` |
@@ -1750,7 +1750,7 @@ returns no question-batch decision (§8).
 | F — Diagnosability | mount and gate decisions are observable outside the plugin without a logger exporter | **met** | `diagnostics.test.js`; `v2-integration.test.js` channels A and B; `wiring.test.js` for the config-fault surface, `degraded[]`, and best-effort logging; `verify.sh`'s installed-artifact check |
 | G — Agent isolation | two live agents in one composition never share governance state | **met** | `agent-isolation.test.js`; `state.test.js` |
 | H — Compatibility baseline | the adapter reports a verdict and detects a simulated host section change | **met** | `compatibility.test.js`; `v2-integration.test.js` reports `COMPATIBLE` from a real assembly |
-| I — Packaging | installable, licensed, changelogged, peer-range enforced | **partial** | LICENSE, CHANGELOG, `files` allowlist, and the narrowed peer range landed; `private: true` and publication remain until Gates C and D pass |
+| I — Packaging | installable, licensed, changelogged, peer-range enforced | **partial** | LICENSE, CHANGELOG, `files` allowlist, the narrowed peer range and a publishable manifest landed; the release gate now installs the packed artifact into a fresh profile (`scripts/verify.sh` phase 3b). Publication itself remains withheld until Gates C and D pass and §34.2 Q5 is decided |
 | J — Withdrawal integrity | the plugin ships three modules with no dangling reference to the removed `user-attention` capability | **met** | full suite + repository-wide reference scan |
 
 Gates were renumbered **A–J with no gap** in `0.7.0`, because the user-attention
@@ -1849,6 +1849,7 @@ executed); P6 and P7 carry the still-open work.
 | B1 (done) — Batch 1, `0.7.0` scope reset | Withdraw `user-attention`/`FC-2.4`; rename project, package, CLI (`dsh-ieg`), prompt section (`ieg:governance`@8500), status line (`ieg:status`), tools, diagnostics (`ieg.*`), storage domain (`ieg_governance`), env vars, and throwaway dirs; re-baseline the prompt (`PROMPT_VERSION` 0.4.0, `RECORDED_PROMPT_BYTES` 2922); renumber gates A–J | `package.json`, `src/index.ts`, `src/kernel/*`, `src/modules/*`, `cordis.patch.yml`, `CHANGELOG.md`, this document, `MAINTENANCE-HANDOFF.md` | P1 | **landed 2026-10-03** — three modules, no dangling reference to the withdrawn capability; Gates C and D remain unverified |
 | B2 (done) — Batch 2, `0.8.0` migration and packaging round | Make the repository root the installable DSH bundle (remove `plugin/`); move the baseline to `0.2.1-alpha.1` (single-baseline policy, no legacy layer); finish the TypeScript migration (`src/**/*.ts` → committed `lib/**`; retire `lib/generated/`); set module descriptors to `0.2.0`; add the packaging structural regression and the `bounded-repair` scenario | `package.json`, `cordis.patch.yml`, `src/**`, `lib/**`, `bin/ieg`, `tsconfig*.json`, `test/integration/packaging.test.js`, `eval/scenarios.mjs`, the documents | B1 | **landed 2026-10-03** — `PROMPT_VERSION` unchanged (compiled text byte-identical), structural suite green, Gates C and D still unmeasured |
 | B3 (done) — Batch 3, `0.9.0` prompt and positioning round | Apply the runtime/state/prompt division to the governance text (2,922 → 2,677 bytes; `PROMPT_VERSION` 0.3.0 → 0.4.0) with every change recorded as change → reason → expected effect → regression check; fix the `ieg_status` tool that rendered no content to the model; README positioning that answers what it is, what it governs, what it does not govern and who it is for, states the product message as an intended benefit, and adds a concise Chinese section | `src/kernel/prompt-compiler.ts`, `src/index.ts`, `src/modules/*.ts`, `test/integration/wiring.test.js`, `README.md`, `CHANGELOG.md`, the documents | B2 | **landed 2026-10-03** — prompt-conformance and structural suites green; behavioural improvement still unmeasured (Gates C and D) |
+| B4 (done) — Batch 4, `0.9.1` distribution round | Establish the layered install model (distribution / DSH installation / discovery / development / post-install control); remove the bootstrap contradiction so no documented flow needs `dsh-ieg` before it exists, and document its real profile-local invocation; make the package publishable (drop `private`, `publishConfig`, keywords); set discovery metadata through the ecosystem's existing mechanism; rewrite the README install and upgrade paths; verify the packed artifact in a fresh profile from the release gate | `package.json`, `README.md`, `TESTING.md`, `CONTRIBUTING.md`, `docs/PACKAGE-REFERENCE.md`, `scripts/verify.sh`, `.github/workflows/release.yml`, the documents | B3 | **landed 2026-10-03** — 27/27 checks including the packed-artifact install; publication still withheld (Gates C and D unmeasured) |
 | P2 | Scope-isolated state | `src/kernel/state.ts`, `src/index.ts`, `src/kernel/orientation.ts`, `src/modules/workspace-governance.ts`, `src/kernel/durability.ts` | P1 | **done** — Gates E and G met |
 | P3 | Diagnostics | `src/kernel/diagnostics.ts`, `src/index.ts`, `lib/contract.d.ts`, `test/unit/diagnostics.test.js`, `test/integration/diagnostics.test.js` | P2 | **done** — Gate F met |
 | P4 | Compatibility adapter | `src/kernel/compatibility.ts`, `lib/compatibility-baseline.json`, `scripts/capture-baseline.mjs`, `test/integration/compatibility.test.js` | P3 | **done** — Gate H met; baseline re-captured for `0.2.1-alpha.1` in B2 |

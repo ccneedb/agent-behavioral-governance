@@ -51,7 +51,7 @@ export declare const PROMPT_VERSION = "0.4.0";
  * Declared here so the `ieg` CLI can name the build without reading the
  * filesystem at runtime.
  */
-export declare const PLUGIN_VERSION = "0.9.0";
+export declare const PLUGIN_VERSION = "0.9.1";
 /**
  * Stable kernel invariants: the statements that hold regardless of which modules
  * are enabled. Compiled ahead of module principles.

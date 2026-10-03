@@ -2,11 +2,11 @@
 doc_type: contributing
 project: information-environment-governance
 version: 0.3.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 audience: contributors
 language: en
 ---
@@ -40,6 +40,34 @@ export IEG_DSH_PACKAGES=/path/to/node_modules/@deepseek-ai
 ```
 
 The verification chain's throwaway home can be relocated with `IEG_VERIFY_HOME`.
+
+## Installing IEG
+
+Order matters: **`dsh-ieg` ships with the package, so it can never be the first
+step.** Install through the host, then manage with the CLI.
+
+```bash
+# 1. install (registry name, absolute path, git address, or tarball)
+dsh plugin --profile <profile> add https://github.com/ccneedb/dsh-information-environment-governance
+dsh --profile <profile> --dump-config | grep -A3 'id: ieg'      # the row must compose
+
+# 2. only now does the CLI exist — inside the profile, not on PATH
+"$DSH_HOME/profiles/<profile>/node_modules/.bin/dsh-ieg" status
+```
+
+- Prefer the DSH-native path. Do not add a wrapper that calls `dsh-ieg` before the
+  package is installed, and do not document one as a first-install step.
+- A local checkout or a release tarball uses the same command with
+  `"file:<path>"`; `npm pack` builds exactly the artifact npm would publish.
+- Discovery uses the ecosystem's existing mechanism — the npm keywords
+  (`dsh-plugin`, `dsh`, `deepseek-harness`) and the GitHub repository topics
+  (`dsh-plugin`, `dsh`, `deepseek-harness`, `information-environment`). There is no
+  separate marketplace protocol to implement.
+- Never claim the package is published, and never present the declared peer range
+  as a tested-versions list: exactly one DSH release, `0.2.1-alpha.1`, is verified.
+- `scripts/verify.sh` proves the distribution path end to end: `npm pack`, a
+  DSH-native install of that tarball into a fresh profile, row composition, the
+  shipped runtime, and the profile-local `dsh-ieg` command.
 
 ## Layout
 
@@ -152,7 +180,7 @@ change.
 IEG is **not production-ready**: the model-backed behavioural gates C
 (improvement) and D (information integrity) have no valid measurement for the
 current prompt revision, packaging (Gate I) is partial, the package is
-`"private": true`, and the publish target is undecided. The rules a release must
+no `private` flag (publishable and verified), and the publish target is undecided. The rules a release must
 satisfy are in
 [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md)
 Part B and the acceptance matrix in its §32. In short:

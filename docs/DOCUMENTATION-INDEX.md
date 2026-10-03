@@ -2,11 +2,11 @@
 doc_type: documentation-index
 project: information-environment-governance
 version: 0.3.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 audience: everyone
 language: en
 ---

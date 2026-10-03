@@ -114,6 +114,50 @@ else
   tail -30 "$TEST_LOG"
 fi
 
+# ── 3b. the packed artifact npm would publish ────────────────────────────────
+# The distribution path is only real if the exact artifact installs from a clean
+# profile. This phase is what makes that claim checkable, and it is separate from
+# the `file:` directory install below, which exercises a checkout.
+step "Pack the publishable artifact and install it into a fresh profile"
+PACK_DIR="${VERIFY_ROOT}/pack"
+mkdir -p "$PACK_DIR"
+PKG_TARBALL=""
+if (cd "$PACKAGE_DIR" && npm_config_cache="${VERIFY_ROOT}/npm-cache" npm pack --pack-destination "$PACK_DIR" >"${VERIFY_ROOT}/pack.log" 2>&1); then
+  PKG_TARBALL="$(ls -1 "${PACK_DIR}"/dsh-information-environment-governance-*.tgz 2>/dev/null | head -1)"
+fi
+if [ -n "$PKG_TARBALL" ]; then
+  pass "npm pack produced $(basename "$PKG_TARBALL")"
+else
+  fail "npm pack"; tail -20 "${VERIFY_ROOT}/pack.log" 2>/dev/null
+fi
+
+PKG_PROFILE="iegpkgverify"
+PKG_HOME="${VERIFY_ROOT}/pkg-home"
+if [ -n "$PKG_TARBALL" ]; then
+  if DSH_HOME="$PKG_HOME" "$DSH_BIN" --profile "$PKG_PROFILE" --from-default-profile headless --dump-config >"${VERIFY_ROOT}/pkg-create.log" 2>&1 &&
+     DSH_HOME="$PKG_HOME" "$DSH_BIN" plugin --profile "$PKG_PROFILE" add "file:${PKG_TARBALL}" >"${VERIFY_ROOT}/pkg-install.log" 2>&1; then
+    pass "the packed artifact installs through the DSH-native path"
+  else
+    fail "packed artifact install"; tail -20 "${VERIFY_ROOT}/pkg-install.log" 2>/dev/null
+  fi
+  if DSH_HOME="$PKG_HOME" "$DSH_BIN" --profile "$PKG_PROFILE" --dump-config 2>/dev/null | grep -q 'name: dsh-information-environment-governance'; then
+    pass "the packed artifact composes the ieg row"
+  else
+    fail "packed artifact composition"
+  fi
+  PKG_INSTALLED="${PKG_HOME}/profiles/${PKG_PROFILE}/node_modules/dsh-information-environment-governance"
+  if [ -f "${PKG_INSTALLED}/lib/index.js" ] && [ -f "${PKG_INSTALLED}/cordis.patch.yml" ]; then
+    pass "the packed artifact ships the runtime and the bundle patch"
+  else
+    fail "the packed artifact is missing lib/index.js or cordis.patch.yml"
+  fi
+  if [ -x "${PKG_HOME}/profiles/${PKG_PROFILE}/node_modules/.bin/dsh-ieg" ]; then
+    pass "the post-install CLI is installed into the profile's bin"
+  else
+    fail "the profile-local dsh-ieg command is missing"
+  fi
+fi
+
 # ── 3. install into a real profile ───────────────────────────────────────────
 step "Install into a throwaway DSH profile"
 rm -rf "${DSH_HOME}/profiles/${PROFILE}"

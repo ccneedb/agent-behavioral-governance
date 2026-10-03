@@ -2,11 +2,11 @@
 doc_type: testing-guide
 project: information-environment-governance
 version: 0.3.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 audience: volunteers
 language: en
 ---
@@ -14,7 +14,7 @@ language: en
 # Volunteer testing guide
 
 IEG is a **prototype**: the model-backed behavioural gates (C and D) have no
-valid measurement yet, the package is `"private": true`, and the publish target is
+valid measurement yet, the package is publishable but not published, and the publish target is
 undecided. That is exactly why volunteer testing matters — the missing evidence is
 behavioural, and it can only come from real sessions. Current status and numbers:
 [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4.
@@ -33,26 +33,32 @@ is a governance layer, not a sandbox, and it is not a security control.
 
 ## 2. Install
 
-IEG is installed into a profile, not globally. The canonical commands are in
-[`README.md`](README.md) §Install — one local `file:` path and two download
-routes (a release tarball, or a clone). Use that block; it is not restated here.
-
-The supported interface is the `dsh-ieg` terminal command
-([`bin/ieg`](bin/ieg)). The npm-native lifecycle needs no pnpm:
+IEG is installed into a profile, not globally. **Install it with the host's own
+plugin installer** — the `dsh-ieg` command comes from the package, so it cannot
+install it and will not exist yet on a clean machine. The canonical command block
+is in [`README.md`](README.md) §Install; it is not restated here.
 
 ```bash
-dsh-ieg install   --profile ieg-test                 # npm pack + npm install + bundle registration
-dsh-ieg install   --profile ieg-test --from <tarball-or-dir>
-dsh-ieg status    --profile ieg-test                 # package, control and composed-row state
-dsh-ieg uninstall --profile ieg-test
+# 1. install through DSH (registry name, absolute path, git address, or tarball)
+dsh plugin --profile ieg-test add https://github.com/ccneedb/dsh-information-environment-governance
+dsh --profile ieg-test --dump-config | grep -A3 'id: ieg'      # the row must compose
+
+# 2. only now does the post-install management command exist — path-local, not on PATH
+"$DSH_HOME/profiles/ieg-test/node_modules/.bin/dsh-ieg" status
 ```
 
-The host's own path also works and registers the profile bundle, but it forwards
-its arguments to **pnpm**:
+The `dsh-ieg` lifecycle (`install | update | uninstall`) manages an
+**already-installed** package — for example to install a specific tarball into a
+profile or to roll one back. It is never the first step:
 
 ```bash
-dsh plugin --profile ieg-test add "file:$PWD"
+"$DSH_HOME/profiles/ieg-test/node_modules/.bin/dsh-ieg" install --profile ieg-test --from <tarball-or-dir>
+"$DSH_HOME/profiles/ieg-test/node_modules/.bin/dsh-ieg" uninstall --profile ieg-test
 ```
+
+`dsh-ieg status` reports the package, control and composed-row state. If you
+prefer a stable command name, install the package globally once it is published
+(`npm install -g dsh-information-environment-governance`) or use `npx dsh-ieg …`.
 
 > **Command syntax gotcha.** Everything after `dsh plugin --profile <name>` is
 > forwarded **verbatim to pnpm**, so launcher flags such as

@@ -1,7 +1,6 @@
 {
   "name": "dsh-information-environment-governance",
-  "version": "0.9.0",
-  "private": true,
+  "version": "0.9.1",
   "description": "Information Environment Governance (IEG): an additive project-work governance layer for DeepSeek Harness. Contributes one system-prompt section and uses deterministic runtime seams (agent/pre-step, tools/pre-execute, tools.guard) for enforcement, plus the `dsh-ieg` terminal interface for control (start/pause/restart/exit), prompt.md editing and the npm lifecycle. Zero runtime dependencies.",
   "type": "module",
   "main": "lib/index.js",
@@ -25,7 +24,9 @@
     "dsh",
     "dsh-plugin",
     "governance",
-    "agent-behavior"
+    "agent-behavior",
+    "information-environment",
+    "dsh-bundle"
   ],
   "license": "MIT",
   "engines": {
@@ -61,5 +62,8 @@
   "homepage": "https://github.com/ccneedb/dsh-information-environment-governance#readme",
   "bugs": {
     "url": "https://github.com/ccneedb/dsh-information-environment-governance/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

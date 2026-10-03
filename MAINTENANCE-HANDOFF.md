@@ -1,12 +1,12 @@
 ---
 doc_type: maintenance-handoff
 project: information-environment-governance
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 version: 0.8.0
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 host_baseline_verified: dsh-0.2.1-alpha.1
 supersedes: none
 language: en
@@ -78,7 +78,7 @@ two model-facing tools: `record_orientation` and `ieg_status`. It compiles
 **2,677 bytes**; the recorded ceiling is **2,945 bytes** (floor 1,400, hard cap
 4,096). Integration tests mount the real `dsh-system-prompt`, `dsh-tools`,
 `dsh-fs-local`, and the `dsh-storage`/`dsh-storage-json`/`dsh-storage-domain`
-stack — not mocks. **272 tests (all pass, no todo, no skip) and 22/22
+stack — not mocks. **272 tests (all pass, no todo, no skip) and 27/27
 verification checks** were derived from the current tree on 2026-10-03, the 0.8.0
 three-module packaging round. Counts move with each round; re-derive them with
 `npm test` and `scripts/verify.sh`, and treat the numbers printed there —
@@ -379,7 +379,7 @@ environment.
 
 Two further reasons it would not appear anywhere else:
 
-- the package is `"private": true` and installed from a local `file:` path, so it
+- the package is publishable but not published, and installed from a local `file:` path, so it
   is not in any registry or marketplace inventory;
 - it is discovered through a profile's own manifest and bundle patch, so it
   appears only after being added to that profile.

@@ -2,11 +2,11 @@
 doc_type: readme
 project: information-environment-governance
 version: 0.5.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 verified_against: dsh-v0.2.1-alpha.1
 language: en
 format_note: conservative-machine-readable-markdown
@@ -26,7 +26,8 @@ in [`PRODUCT-SPEC.md` §1](PRODUCT-SPEC.md#1-product-positioning); this README
 links there rather than restating them.
 
 > **Status: prototype, not production-ready.** The package is
-> `dsh-information-environment-governance` **0.9.0**, `"private": true`, and the
+> `dsh-information-environment-governance` **0.9.1** — publishable and verified,
+> but **not published** — and the
 > publish target is undecided. Behavioural improvement (Gate C) and information
 > integrity (Gate D) have no valid measurement for the current prompt revision,
 > and packaging (Gate I) is partial. It is not recommended for a working
@@ -187,7 +188,7 @@ dsh-ieg start                # status=running
 dsh-ieg pause                # status=paused -> section not emitted, hooks pass through
 dsh-ieg restart              # status=running, generation+1: reload config and prompt.md
 dsh-ieg exit                 # status=stopped (governance off for this profile; install untouched)
-dsh-ieg install   [--profile P] [--from <tarball|dir>]   # npm lifecycle
+dsh-ieg install   [--profile P] [--from <tarball|dir>]   # post-install lifecycle
 dsh-ieg update    [--profile P] [--from <tarball|dir>]
 dsh-ieg uninstall [--profile P]
 dsh-ieg prompt               # print the effective prompt, its version and byte count
@@ -219,53 +220,120 @@ It reports its own state through the `ieg:status` runtime-context line and the
 [`ARCHITECTURE-SPEC-AGENT-REFERENCE.md`](ARCHITECTURE-SPEC-AGENT-REFERENCE.md)
 Part B.
 
-## Install (prototype only)
+## Install
 
-IEG is delivered as an npm package with a bundle patch. Install it into a
-**throwaway** profile, never into a profile you rely on. Package-level detail —
-configuration, the `files` allowlist, and package verification — is in
-[`docs/PACKAGE-REFERENCE.md`](docs/PACKAGE-REFERENCE.md); this section is the user-facing install
-flow.
+IEG is a **DSH plugin**. It is installed by the host's own plugin installer and
+only afterwards managed by `dsh-ieg`. Those are two separate steps: **`dsh-ieg`
+is supplied by the package itself**, so it cannot bootstrap the package. On a
+clean machine a bare `dsh-ieg` is simply not on your `PATH`:
 
-```bash
-PLUGIN=/path/to/this/repository
-dsh-ieg install   --profile <your-test-profile>          # npm lifecycle + bundle registration
-dsh-ieg install   --profile <your-test-profile> --from <tarball-or-dir>
-dsh-ieg status    --profile <your-test-profile>          # package, control and composed-row state
-dsh-ieg uninstall --profile <your-test-profile>          # uninstall / rollback
+```console
+$ dsh-ieg install --profile web --from <tarball>
+bash: dsh-ieg: command not found
 ```
 
-`dsh-ieg install` uses npm and registers the profile bundle itself, so it works
-without pnpm. If you prefer the host's own path (which forwards to pnpm), the
-equivalent is:
+Install into a **throwaway** profile, never into a profile you rely on.
+
+### 1. Standard install — DSH-native (recommended)
+
+DSH installs a plugin from a registry package name, an absolute path, a git
+address, or a tarball. That is the first-install path:
 
 ```bash
-dsh plugin --profile <your-test-profile> add "file:$PLUGIN"      # local dir or tarball
+# from the repository (the repository root IS the package)
 dsh plugin --profile <your-test-profile> add \
-  https://github.com/ccneedb/dsh-information-environment-governance   # or the repository itself
-dsh --profile <your-test-profile> --dump-config | grep -A3 'id: ieg'   # verify the row composes
+  https://github.com/ccneedb/dsh-information-environment-governance
+
+# confirm the bundle row composed
+dsh --profile <your-test-profile> --dump-config | grep -A3 'id: ieg'
+```
+
+The DSH Web UI's plugin installation offers the same repository-URL path through
+its "Git repository" field — the graphical form of the same mechanism.
+
+### 2. npm package
+
+The package is **publishable and verified, not yet published**. The registry name
+`dsh-information-environment-governance` is currently unclaimed, so a first
+publication is a maintainer action, still withheld pending Gates C and D and the
+publish-target decision ([Status](#status)). Until then, `npm install` from the
+registry does not resolve; build and install the exact artifact locally:
+
+```bash
+npm pack                        # builds exactly what npm would publish
+dsh plugin --profile <your-test-profile> add \
+  "file:./dsh-information-environment-governance-<version>.tgz"
+```
+
+The packed artifact carries exactly the runtime — `lib/**`, `bin/ieg`,
+`cordis.patch.yml`, `package.json`, `README.md`, `LICENSE`, `CHANGELOG.md` — and
+none of `src/`, `test/`, `eval/`, `docs/`. Package-level configuration detail is
+in [`docs/PACKAGE-REFERENCE.md`](docs/PACKAGE-REFERENCE.md).
+
+### 3. Development and recovery
+
+For working on IEG itself, or recovering a profile:
+
+```bash
+dsh plugin --profile <your-test-profile> add "file:/path/to/this/repository"   # a checkout
 dsh plugin --profile <your-test-profile> remove dsh-information-environment-governance
 ```
 
 A release tarball is attached to the
 [GitHub release](https://github.com/ccneedb/dsh-information-environment-governance/releases);
-a local tarball or directory and the Git URL install the same root package.
+it is a developer/recovery source, not the normal user path.
+
+### Post-install management: `dsh-ieg`
+
+`dsh-ieg` manages an **already installed** IEG. pnpm installs it into the profile
+beside the package rather than onto your `PATH`, so the dependable invocation is
+the profile-local binary:
+
+```bash
+<DSH_HOME>/profiles/<your-test-profile>/node_modules/.bin/dsh-ieg status
+```
+
+For a stable command, install the package globally with npm
+(`npm install -g dsh-information-environment-governance`, once published) or call
+it through `npx dsh-ieg …`. It provides control
+(`start`/`pause`/`restart`/`exit`), `prompt` editing, `status` reporting, and —
+for an already-installed package — the `install`/`update`/`uninstall` lifecycle.
+It is never the first-install step.
+
+### Upgrading
+
+A normal upgrade re-runs the host's own install for the profile; that is what
+re-resolves and re-links the package, and `dsh-ieg` is not involved:
+
+```bash
+dsh plugin --profile <your-test-profile> add <the same source you installed from>
+dsh --profile <your-test-profile> --dump-config | grep -A3 'id: ieg'      # still composes
+<DSH_HOME>/profiles/<your-test-profile>/node_modules/.bin/dsh-ieg status  # version + control state
+```
+
+First install, upgrade and developer/recovery all use the same DSH-native
+command; only the *source* changes (repository URL, registry name, checkout, or
+tarball).
 
 Two caveats worth knowing before first use:
 
 - a profile **links the plugin at install time**, so re-install after any source
   change or you will exercise the old code;
 - IEG defaults to `workspace.policy: ask` and `overlapCheck: ask`, which **fail
-  closed** in a composition with no approval channel. For a first trial prefer
-  `workspace: { policy: allow, overlapCheck: ask, protectedPaths: [...] }` and
-  keep the non-intrusive `requireBeforeMutation: false` default.
+  closed** in a composition with no approval channel. In a headless or
+  agent-delegated session there is no one to answer, so the gate denies writes —
+  see [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §7. For a first trial
+  prefer `workspace: { policy: allow, overlapCheck: ask, protectedPaths: [...] }`
+  and keep the non-intrusive `requireBeforeMutation: false` default.
 
 Requirements: Node.js >= 20 and a DeepSeek Harness installation. The declared
 peer range is `>=0.2.1-alpha.1 <0.3.0`, and `dsh.compatibility.dshReleases`
 records that single baseline as `verified`; the committed baseline was
 re-captured against the installed `0.2.1-alpha.1` host in 0.8.0 (identical section
 order and host prompt hash). The retired `0.2.0-rc.2` baseline is **SUPERSEDED**
-and is no longer in the range or the release map. See
+and is no longer in the range or the release map. Note that the declared range is
+a **compatibility statement, not a tested-versions list**: exactly one release,
+`0.2.1-alpha.1`, is verified. See
 [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4.
 
 ### Volunteer testing
@@ -324,7 +392,7 @@ installation is present. Point the loader at a non-default install with
 ## Working prototype
 
 The repository root **is** an installable **`dsh-information-environment-governance`**
-`0.9.0` (`"private": true`, unpublished) that realizes the architecture above
+`0.9.1` (publishable and verified, **not published**) that realizes the architecture above
 with zero runtime dependencies. It contributes one additive prompt section and
 enforces through `agent/pre-step`, `tools/pre-execute`, `ctx.tools.guard`, and
 `ctx.storageDomain`; it reports its own state through a bounded runtime-context
@@ -340,7 +408,7 @@ checks — covers strict typechecking, the full test suite (**272 tests, all pas
 no todo, no skip; unit,
 prompt conformance, and integration mounting the **real** `dsh-system-prompt`,
 `dsh-tools`, `dsh-fs-local`, and the
-`dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack) and the **22 checks**
+`dsh-storage`/`dsh-storage-json`/`dsh-storage-domain` stack) and the **27 checks**
 of [`scripts/verify.sh`](scripts/verify.sh): a real install into
 a throwaway profile, composition of the `ieg` row, and positive proof that the
 **installed** plugin binds its section, listeners, and tools — and absorbs a bad
@@ -372,8 +440,10 @@ re-run rather than superseded numbers.
    live-profile rollout, and the control state file being per-user rather than
    per-profile (Q8). The compatibility-baseline re-capture (Q7) closed in 0.8.0:
    the single supported baseline is `dsh 0.2.1-alpha.1`.
-3. **`private: true` is retained** until 1 and 2 are resolved; removing it is the
-   release action.
+3. **The package is publishable but not published.** `private` is gone, the packed
+   artifact has been verified from a clean profile, and the registry name is
+   unclaimed; publication itself is the release action, withheld until 1 and 2 are
+   resolved.
 
 The current version, test count, verification result, and the per-gate status are
 maintained once in [`MAINTENANCE-HANDOFF.md`](MAINTENANCE-HANDOFF.md) §3–§4, with

@@ -4,6 +4,8 @@
 #
 # This script used to implement install/update/uninstall itself. Since 0.6.0 the
 # lifecycle has exactly **one** implementation: `dsh-ieg install|update|uninstall`
+# (a POST-INSTALL management command: `dsh-ieg` ships with the package, so a
+# first-time install must go through `dsh plugin --profile <p> add <source>`).
 # (compiled from `src/kernel/lifecycle.ts`). This wrapper exists only so
 # existing callers of `scripts/ieg-npm.sh` keep working, and so nothing has to
 # remember two sets of semantics.

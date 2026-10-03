@@ -42,7 +42,12 @@ function sourceFiles(dir) {
 
 test('the repository root is the installable DSH bundle', () => {
   assert.equal(manifest.name, 'dsh-information-environment-governance')
-  assert.equal(manifest.private, true)
+
+  // Publishable, not published: Batch 4 made the package npm-ready, while
+  // publication itself stays a gated release action. `private: true` would make
+  // `npm publish` impossible, so the two states must be checked together.
+  assert.notEqual(manifest.private, true, 'a publishable package must not be private')
+  assert.equal(manifest.publishConfig?.access, 'public')
 
   const patch = manifest.dsh?.bundle?.patch
   assert.equal(typeof patch, 'string', 'the manifest must declare dsh.bundle.patch')
@@ -86,6 +91,12 @@ test('the files allowlist ships every declared entry, and only what is needed', 
   // A git-installable bundle must ship the built runtime: pnpm does not run a
   // build step for a git dependency, so the compiled entry has to be committed.
   assert.ok(existsSync(at('lib/index.js')), 'the compiled entry must be committed for Git installs')
+  // The published artifact is exactly the runtime: development trees must never
+  // ship. A consumer that needs `src/` or the test suite means the package is
+  // carrying files nobody installs.
+  for (const forbidden of ['src', 'test', 'test-support', 'eval', 'docs', '.github', 'tsconfig.json']) {
+    assert.ok(!allowed.includes(forbidden), `the files allowlist must not ship ${forbidden}`)
+  }
 })
 
 test('no obsolete package layout or withdrawn capability remains', () => {

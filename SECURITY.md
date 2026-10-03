@@ -2,11 +2,11 @@
 doc_type: security-policy
 project: information-environment-governance
 version: 0.3.0
-plugin_version: 0.9.0
+plugin_version: 0.9.1
 status: active
 owner: maintainers
 last_reviewed: 2026-10-03
-revision: 0.9.0-batch-3
+revision: 0.9.1-batch-4
 audience: everyone
 language: en
 ---
@@ -17,7 +17,7 @@ language: en
 
 IEG is a **verifiable prototype**, not a production component. It is not
 recommended for installation into a working profile; the model-backed behavioural
-gates (C and D) are unmeasured, and the package stays `"private": true`. Do not
+gates (C and D) are unmeasured, and the package is publishable but not published. Do not
 treat IEG as a security control.
 
 ## What IEG is — and is not
