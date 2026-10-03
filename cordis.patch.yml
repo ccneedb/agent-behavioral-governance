@@ -1,0 +1,96 @@
+# dsh-information-environment-governance (IEG) — bundle patch
+#
+# Inserts exactly ONE composition row for the IEG kernel. All three governance
+# modules are registered by that row; they are not separate plugin rows, so the
+# composition tree stays small and the prompt aggregation stays centralized
+# (see ARCHITECTURE-SPEC-AGENT-REFERENCE.md §4, "Core Composition Pattern").
+#
+# The row id is targeted by later patch layers with last-write-wins per row, so
+# a deployment overrides IEG behaviour by re-stating `id: ieg` with a full
+# replacement `config` (a patch replaces the whole config, it does not merge).
+- insert:
+    - id: ieg
+      name: dsh-information-environment-governance
+      config:
+        # Master switch. When false the row mounts but contributes nothing.
+        enabled: true
+        # Explicit numeric prompt-section order. Verified host fact: DSH exposes
+        # no plugin-allocatable placement (getSectionOrder resolves only its own
+        # enumerated names), so IEG must choose a finite order itself. 8500 sits
+        # after first-party capability/tool sections (TOOL_* 1000-5000+) and
+        # before DELIVERABLE_FILE_REFERENCES (9000), so the governance section
+        # can reference capabilities without contradicting their definitions.
+        sectionOrder: 8500
+        # Per-module enablement. All three shipped modules are on by default.
+        modules:
+          project-governance:
+            enabled: true
+          information-integrity:
+            enabled: true
+          workspace-governance:
+            enabled: true
+        # workspace-governance policy for persistent mutation.
+        #   allow -> never gate     ask -> route to ctx.approval (host prompt)
+        #   deny  -> refuse the call outright
+        # `ask` is the safe default: it delegates the human decision to the
+        # host's existing approval service and inherits its fail-closed path.
+        workspace:
+          policy: ask
+          # File-effect tools only. Shell tools (bash/pwsh) are deliberately NOT
+          # listed: the gate sees only an opaque command string, so gating them
+          # would block read-only commands such as `ls` and `node --test`, and
+          # under `policy: ask` with no approval channel it would deny the agent
+          # its whole shell. The host's own sandbox already confines shell writes.
+          mutatingTools:
+            - write
+            - edit
+            - str_replace_editor
+          protectedPaths: []
+          # Classify a shell command by its text, so a write performed with a
+          # redirection or `rm`/`cp`/`mv` is governed even though shell tools are
+          # deliberately absent from `mutatingTools`. Quoted text is treated as
+          # data unless the command wraps another command, so read-only searches
+          # such as `rg '=>' src` are not gated. Set false to restore tool-only
+          # governance and accept the redirection coverage hole.
+          classifyShellCommands: true
+          # Refuse to create a document that duplicates an existing one.
+          #   off  -> disable the check
+          #   ask  -> route to the user for a decision (default)
+          #   deny -> refuse outright
+          # Detects body duplication, an identical H1, and — crucially — a new
+          # file whose *filename subject* an existing document already has a
+          # heading for, which body similarity alone misses.
+          overlapCheck: ask
+        # project-governance pre-step orientation gate.
+        #   off -> observe and record only (default; never blocks a step)
+        #   warn -> record a diagnostic, then admit
+        #   reject -> block the step when orientation is incomplete
+        preStep:
+          orientationGate: off
+          # Refuse the first persistent workspace mutation until the agent has
+          # called record_orientation. Defaults to false (non-intrusive) per the
+          # user decision in ARCHITECTURE-SPEC §34.2 Q1: a deployment is not asked
+          # to authorize the first write of every session. A strict deployment
+          # opts in with `true`, and the evaluation harness states its choice
+          # explicitly either way.
+          requireBeforeMutation: false
+        # User-editable prompt. `compiled` (default) uses the audited generated
+        # section; `append` adds guidance; `replace` reads `file` verbatim. A
+        # `{{ }}` in the text, or exceeding the byte ceiling without
+        # `allowOverBudget`, is refused and the compiled default is kept — the
+        # refusal is reported as ieg.prompt_override_rejected.
+        #
+        # Precedence (0.6.0): the control-plane `prompt.md` beside the control
+        # state file (edited with `ieg prompt edit`) outranks this whole block.
+        # `ieg prompt reset` deletes it and returns here.
+        prompt:
+          mode: compiled
+          append: ""
+          file: ""
+          allowOverBudget: false
+        # Opt-in diagnostics mirror for a front end that cannot read the
+        # in-process ring. Empty `file` means no file I/O at all.
+        diagnosticsExport:
+          file: ""
+          limit: 50
+        diagnostics: true

@@ -37,13 +37,10 @@ jobs:
       - name: Install TypeScript
         run: npm install --global typescript
       - name: Build the migrated TypeScript sources
-        working-directory: plugin
         run: npm run build
       - name: Typecheck (strict checkJs)
-        working-directory: plugin
         run: npm run typecheck
       - name: Unit, conformance, and portable integration tests
-        working-directory: plugin
         run: node --test
 
   # Documentation health. Zero dependencies: the checker is POSIX sh and uses only
@@ -63,7 +60,7 @@ jobs:
   # row composition, an execution proof against the installed artifact, and a
   # live mount. It is allowed to fail because the host package is published by
   # another project and may be unavailable or renamed; a failure here is a
-  # signal to run `plugin/scripts/verify.sh` locally, not a broken build.
+  # signal to run `scripts/verify.sh` locally, not a broken build.
   with-host:
     name: full verification chain (pinned host)
     runs-on: ubuntu-latest
@@ -81,12 +78,11 @@ jobs:
         run: |
           DSH_PACKAGES="$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai"
           test -d "$DSH_PACKAGES" || { echo "host layout not found at $DSH_PACKAGES"; exit 1; }
-          echo "ABG_DSH_PACKAGES=$DSH_PACKAGES" >> "$GITHUB_ENV"
+          echo "IEG_DSH_PACKAGES=$DSH_PACKAGES" >> "$GITHUB_ENV"
       - name: Full verification chain
-        working-directory: plugin
         run: ./scripts/verify.sh
 
       - name: npm-native lifecycle (pack -> install -> compose -> uninstall)
         run: |
-          chmod +x scripts/abg-npm.sh scripts/abg-npm-lifecycle-check.sh
-          ./scripts/abg-npm-lifecycle-check.sh
+          chmod +x scripts/ieg-npm.sh scripts/ieg-npm-lifecycle-check.sh
+          ./scripts/ieg-npm-lifecycle-check.sh

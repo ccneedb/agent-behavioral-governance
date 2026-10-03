@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(HERE, '..')
-const SESSIONS = path.join(REPO, '.abg-e2e', 'dsh-home', 'sessions')
+const SESSIONS = path.join(REPO, '.ieg-e2e', 'dsh-home', 'sessions')
 const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
 
 /**
@@ -114,20 +114,9 @@ function analyse(results) {
     const calls = toolCallsFor(row.runId)
     if (calls === null) return { ...row, ...(measured ?? {}), toolCalls: null, analysisError: 'no session log' }
 
-    const { names, args } = calls
+    const { names } = calls
     const orientationAt = names.indexOf('record_orientation')
     const firstMutationAt = names.findIndex((name) => MUTATING.has(name))
-    const askCalls = names
-      .map((name, index) => (name === 'ask_user_question' ? index : -1))
-      .filter((index) => index !== -1)
-      .map((index) => {
-        try {
-          const parsed = typeof args[index] === 'string' ? JSON.parse(args[index]) : args[index]
-          return Array.isArray(parsed?.questions) ? parsed.questions.length : 0
-        } catch {
-          return 0
-        }
-      })
 
     return {
       ...row,
@@ -148,7 +137,6 @@ function analyse(results) {
         orientationAt !== -1 && firstMutationAt !== -1
           ? orientationAt < firstMutationAt
           : orientationAt !== -1 && firstMutationAt === -1,
-      askCalls,
     }
   })
 }
@@ -158,7 +146,7 @@ function analyse(results) {
 // `orientation_first = 0`, contradicting the recorded finding. Refuse to run and
 // write nothing, rather than emit or overwrite a misleading artifact.
 if (!existsSync(SESSIONS)) {
-  console.error(`abg: no session logs at ${path.relative(REPO, SESSIONS)}.`)
+  console.error(`ieg: no session logs at ${path.relative(REPO, SESSIONS)}.`)
   console.error('Ordering is derived from tool/call events in those logs, so this analysis')
   console.error('cannot be reproduced without them. Re-run an end-to-end evaluation first:')
   console.error('  node eval/e2e.mjs 4 auth-doc-request')
@@ -192,11 +180,9 @@ for (const scenario of scenarioIds) {
     const oriented = rows.filter((row) => row.orientationBeforeMutation).length
     const called = rows.filter((row) => row.orientationCalled).length
     const created = rows.reduce((total, row) => total + (row.created?.length ?? 0), 0)
-    const asks = rows.reduce((total, row) => total + (row.askCalls?.length ?? 0), 0)
-    const maxBatch = Math.max(0, ...rows.flatMap((row) => row.askCalls ?? []))
     console.log(
       `  ${arm.padEnd(10)} n=${n}  dup_doc=${dup}/${n}  stale_resolved=${stale}/${n}  ` +
-        `orientation_called=${called}/${n}  orientation_first=${oriented}/${n}  files_created=${created}  ask_calls=${asks}  max_batch=${maxBatch}`,
+        `orientation_called=${called}/${n}  orientation_first=${oriented}/${n}  files_created=${created}`,
     )
   }
 }

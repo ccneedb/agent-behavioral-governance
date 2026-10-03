@@ -1,0 +1,8 @@
+# E2E control: the plugin is installed but disabled.
+#
+# This is the matched control for the end-to-end runs. Everything else about the
+# composition — the profile, the model, the sandbox, the task — is identical to
+# the treatment arm; only IEG's contribution is switched off.
+- id: ieg
+  config:
+    enabled: false

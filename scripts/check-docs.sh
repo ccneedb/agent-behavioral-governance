@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# check-docs.sh — documentation health for the ABG repository.
+# check-docs.sh — documentation health for the IEG repository.
 #
 # POSIX sh, zero dependencies beyond the base utilities. Rules enforced:
 #   (a) no broken relative link in a governed document;
@@ -21,8 +21,8 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 INDEX_REL="docs/DOCUMENTATION-INDEX.md"
 INDEX="$ROOT/$INDEX_REL"
 
-ERRFILE="${TMPDIR:-/tmp}/abg-check-docs.$$.err"
-INDEXED="${TMPDIR:-/tmp}/abg-check-docs.$$.idx"
+ERRFILE="${TMPDIR:-/tmp}/ieg-check-docs.$$.err"
+INDEXED="${TMPDIR:-/tmp}/ieg-check-docs.$$.idx"
 cleanup() { rm -f "$ERRFILE" "$INDEXED" "${INDEXED}.links"; }
 trap cleanup EXIT HUP INT TERM
 

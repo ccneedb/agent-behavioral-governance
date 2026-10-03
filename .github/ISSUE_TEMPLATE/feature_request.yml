@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        ABG is deliberately small. Before proposing a module, check the rules in
+        IEG is deliberately small. Before proposing a module, check the rules in
         `CONTRIBUTING.md`: one additive prompt section, deterministic enforcement
         over prompt text, zero runtime dependencies, and no document that
         duplicates another.
@@ -33,7 +33,7 @@ body:
     id: problem
     attributes:
       label: Problem
-      description: What recurring failure does this address? Which failure class (FC-2.x) or gate does it belong to?
+      description: What recurring failure does this address? Which failure class (FC-2.1–FC-2.3) or acceptance gate does it belong to?
     validations:
       required: true
 

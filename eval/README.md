@@ -1,23 +1,23 @@
-# ABG behavioural evaluation
+# IEG behavioural evaluation
 
-ABG is the sanctioned short form for `dsh-agent-behavioral-governance`, the
+IEG is the sanctioned short form for `dsh-information-environment-governance`, the
 plugin under evaluation.
 
 Gate C of the implementation handoff asks for "at least one target failure mode
-shows measurable improvement against baseline". This harness is how that is
-measured: seeded throwaway sandboxes, two arms, and an outcome scored from the
-**filesystem** rather than from the subject's own narration.
+shows measurable improvement against baseline", and Gate D asks whether information
+integrity improves. This harness is how both are measured: seeded throwaway
+sandboxes, two arms, and an outcome scored from the **filesystem** rather than from
+the subject's own narration.
 
-> **No current measurement exists.** Every result this harness has produced so far
-> was measured against the **five-module** governance prompt (3,905 bytes), which
-> contained the module later removed by explicit user decision
-> (`ARCHITECTURE-SPEC-AGENT-REFERENCE.md` §23). The plugin now compiles a
-> **four-module** prompt (3,459 bytes), so those numbers described a prompt
-> revision that no longer exists. They were **deleted rather than annotated**:
-> keeping superseded evidence beside current behaviour is exactly the failure mode
-> ABG exists to prevent. Gates C, D, and E are therefore **unmeasured** for the
-> current revision, and running this harness against the current plugin is what
-> closes them.
+> **No current measurement exists for this revision.** Every result this harness has
+> produced so far was measured against an earlier, larger governance prompt (first
+> five modules, then four) that no longer exists. The plugin now compiles a
+> **three-module** prompt — **2922 bytes**, `PROMPT_VERSION` **0.3.0** — so those
+> numbers described a prompt revision that is gone. They were **deleted rather than
+> annotated**: keeping superseded evidence beside current behaviour is exactly the
+> failure mode IEG exists to prevent. **Gates C (behavioural improvement) and D
+> (information integrity) are therefore unmeasured for the current revision**, and
+> running this harness against the current plugin is what closes them.
 
 ## Method
 
@@ -34,7 +34,7 @@ task, working directory, reporting requirement, and tool access are identical:
 
 ```
 control    = framing + task + reporting
-treatment  = ABG governance section + framing + task + reporting
+treatment  = IEG governance section + framing + task + reporting
 ```
 
 The treatment block is compiled from the live plugin at seed time, so improving
@@ -49,21 +49,11 @@ drift apart.
 | `vague-continuation` | OBJ-1 | task is "Continue improving this project" — no intent, scope, terminology or plan given |
 | `auth-doc-request` | OBJ-2 | asks for a write-up of the authentication model, which `SPEC.md` already documents; a stale `API-REFERENCE.md` also contradicts it |
 | `doc-consolidation` | OBJ-2 | asks to bring the docs in line with the current service: reconcile or leave the contradiction |
-| `question-consolidation` | OBJ-3 (Gate D) | five release decisions are explicitly the owner's call and answerable only by a human, so a correct run must ask — and the question is whether it asks once or five times |
+| `bounded-repair` | OBJ-3 | a bounded repair with one stated deliverable: every new persistent file is the trap (reports, notes, scratch scripts, speculative modules) |
 
-## Reaching `ask_user_question` in a headless trial
-
-A headless composition has no human client, so `user-questions/request` is never
-claimed and `ask_user_question` is never reached. `eval/answerer/` is an
-**evaluation-only** DSH plugin that claims that waterfall and answers
-deterministically (`byId` → first option → `byKeyword` → `defaultAnswer`), so the
-batching path can be exercised. It is mounted in **both** arms: it is part of the
-harness, not of the treatment. It answers on the user's behalf, so it must never
-be installed in a profile a human uses.
-
-```bash
-node --test eval/answerer/answerer.test.mjs    # the pure decision function
-```
+The former `question-consolidation` scenario was removed in `0.7.0` along with the
+`user-attention` capability, whose classification is **"Out of Scope / Externally
+Solved"**. It is not a current scenario and has no metric.
 
 ## Metrics
 
@@ -74,10 +64,8 @@ node --test eval/answerer/answerer.test.mjs    # the pure decision function
 | `created` / `new_files_total` | persistent artifacts added — the workspace-hygiene signal |
 | `modified` / `deleted` | in-place correction, which is the desired behaviour |
 
-Question consolidation (Gate D) uses the handoff's metric set:
-`questions_registered`, `questions_sent`, `batches_sent`, `redundant_questions`,
-`average_questions_per_batch`, `user_interruption_count`, and
-`blocked_execution_time`.
+Every metric is derived from the filesystem by `harness.mjs measure`, so improving
+the detector re-scores existing sandboxes for free.
 
 ## Reproducing the evaluation
 
@@ -89,20 +77,20 @@ and are not kept.
 
 **Re-creating the end-to-end environment.** The throwaway profile and the staged
 credentials are regenerated, never stored: a previous home held a copy of the
-user's credentials file, and its linked plugin copy went stale. `.abg-e2e/`
-therefore holds only the two overlay files — `abg-config.yml` (treatment) and
-`abg-off.yml` (control).
+user's credentials file, and its linked plugin copy went stale. `.ieg-e2e/`
+therefore holds only the two overlay files — `ieg-config.yml` (treatment) and
+`ieg-off.yml` (control).
 
 ```bash
 cd <repository root>
-export DSH_HOME=$PWD/.abg-e2e/dsh-home
-dsh --profile abge2e --from-default-profile headless --dump-config   # throwaway profile
-dsh plugin --profile abge2e add "file:$PWD/plugin"                   # install ABG
+export DSH_HOME=$PWD/.ieg-e2e/dsh-home
+dsh --profile iege2e --from-default-profile headless --dump-config   # throwaway profile
+dsh plugin --profile iege2e add "file:$PWD/plugin"                   # install IEG
 cp /home/hero/.dsh/.credentials.yaml "$DSH_HOME/.credentials.yaml"   # stage credentials
 chmod 600 "$DSH_HOME/.credentials.yaml"
 node eval/e2e.mjs 4 auth-doc-request
 node eval/e2e-analyze.mjs
-rm -rf .abg-e2e/dsh-home                                             # also removes the credentials
+rm -rf .ieg-e2e/dsh-home                                             # also removes the credentials
 ```
 
 Staging credentials is a deliberate, user-authorized act: do it only for a run
@@ -134,14 +122,28 @@ state is lost. Reproducing an end state requires re-running the agent.
   invites creating a document cannot exercise the overlap gate. Design the trap
   deliberately and confirm the control arm actually falls into it.
 
+## What each level of evidence establishes
+
+| Claim | Established by |
+|---|---|
+| The structural mechanism works | `npm test` and `scripts/verify.sh`: the section binds, the three listeners fire, the gates decide, per-agent state persists, the package installs and mounts |
+| The behavioural outcome improves | this harness only — seeded sandboxes, both arms, a rubric frozen before the runs, and a judge that does not see the arm |
+
+A green structural suite is **not** evidence of behavioural improvement, and an
+`eval/` result is **not** evidence that the mechanism works. Keep the two claims
+apart in every report: state which one the evidence supports.
+
 ## Limitations of the method
 
 - **It needs a real model.** Every measurement costs API calls, and the harness
   cannot run without staged credentials.
-- **Arm comparisons measure the prompt unless ABG is mounted.** Prompt-only arms
+- **Arm comparisons measure the prompt unless IEG is mounted.** Prompt-only arms
   differ by the governance section alone; an end-to-end arm differs by `enabled`
-  in the ABG row and must be compared against a matched mounted control.
+  in the IEG row and must be compared against a matched mounted control.
 - **Scoring is rubric-based.** A claim of improvement needs a rubric frozen before
   the runs and, to avoid author bias, applied by a judge that does not see the arm.
 - **Small `n` gives direction, not statistics.** Report the sample size with every
   number, and do not pool prompt-only and mounted runs.
+- **Gates C and D are open.** No current revision of the plugin has a measured
+  behavioural or information-integrity result; the numbers that existed described a
+  superseded prompt and were deleted.

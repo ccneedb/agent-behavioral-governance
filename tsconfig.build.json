@@ -1,0 +1,33 @@
+{
+  // Build configuration: emits the JavaScript (and declarations) that the
+  // package actually ships. `src/**/*.ts` is the only source of truth for
+  // migrated modules; `lib/**` is a build artifact and must never be
+  // edited by hand. See TYPESCRIPT-MIGRATION.md.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    // The build emits, so it must not read JavaScript: un-migrated `lib/*.js`
+    // files are not build inputs (they are still typechecked by tsconfig.json).
+    "allowJs": false,
+    "noEmit": false,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    // Declarations are required, not optional: `lib/index.js` (still JavaScript)
+    // imports the generated `.js`, and without a sibling `.d.ts` the typecheck
+    // would load the emitted JavaScript into the `checkJs` program.
+    "declaration": true,
+    "rootDir": "src",
+    "outDir": "lib"
+  },
+  // `files` rather than a second `include` entry: TypeScript automatically
+  // excludes the `outDir` from the program, and the ambient contract lives in
+  // `lib/`. A `files` entry is an unconditional allowlist, so the host types
+  // stay in the program while `lib/**` remains build output.
+  "files": ["lib/contract.d.ts"],
+  "include": ["src/**/*.ts"]
+}

@@ -1,19 +1,18 @@
 name: Bug report
-description: Report a defect in ABG itself (not a task failure — use the report template for that).
+description: Report a defect in IEG itself (not a task failure — use the report template for that).
 title: "[bug] "
 labels: ["bug", "triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report. ABG is a **prototype**: the model-backed
-        behavioural gates (C, D, E) are unmeasured and it is not recommended for
-        a working profile.
+        Thanks for the report. IEG is a **prototype**: the model-backed behavioural
+        and information-integrity gates (C, D) are unmeasured and it is not
+        recommended for a working profile.
 
-        A **task failure** (ABG's governance produced a wrong outcome during real
-        work) is more useful filed with
-        [`docs/TASK-FAILURE-REPORT-TEMPLATE.md`](https://github.com/ccneedb/agent-behavioral-governance/blob/main/docs/TASK-FAILURE-REPORT-TEMPLATE.md)
-        pasted into the issue.
+        A **task failure** (IEG's governance produced a wrong outcome during real
+        work) is more useful when the report names the task, the seed state, and
+        the exact governance decision (allow / ask / deny) that was wrong.
 
         **Never paste credentials, `~/.dsh/.credentials.yaml` contents, or
         unredacted session logs.** See `SECURITY.md`.
@@ -23,9 +22,9 @@ body:
     attributes:
       label: Pre-flight
       options:
-        - label: I called `abg_status` and pasted its JSON below (required if ABG mounted at all).
+        - label: I called `ieg_status` and pasted its JSON below (required if IEG mounted at all).
           required: false
-        - label: "I reproduced the failure with ABG disabled (`enabled: false` or the `abg-off.yml` overlay), or I explain why that was not possible."
+        - label: "I reproduced the failure with IEG disabled (`enabled: false` or the `ieg-off.yml` overlay), or I explain why that was not possible."
           required: true
         - label: This is not in the accepted-limits list in `SECURITY.md` ("Known limitations — not vulnerabilities, not bugs").
           required: true
@@ -34,12 +33,12 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: OS, Node version, DSH version (`dsh -V`), ABG version, profile, and whether the plugin was re-installed after the last source change.
+      description: OS, Node version, DSH version (`dsh -V`), IEG version, profile, and whether the plugin was re-installed after the last source change.
       placeholder: |
         OS: Ubuntu 24.04
         node -v: v22.x
         dsh -V: 0.2.0-rc.2
-        ABG: 0.5.0 (PROMPT_VERSION ...)
+        IEG: 0.7.0 (PROMPT_VERSION 0.3.0)
         profile: test-profile
         re-installed after last change: yes
     validations:
@@ -48,7 +47,7 @@ body:
   - type: textarea
     id: status
     attributes:
-      label: abg_status output
+      label: ieg_status output
       description: "Paste the JSON verbatim. An empty or `mounted: false` result is itself a useful finding."
       render: json
     validations:
@@ -58,7 +57,7 @@ body:
     id: config
     attributes:
       label: Effective configuration
-      description: The `abg` row from `dsh --profile <name> --dump-config`, including any `--patch` overlays.
+      description: The `ieg` row from `dsh --profile <name> --dump-config`, including any `--patch` overlays.
       render: yaml
     validations:
       required: true
@@ -74,7 +73,7 @@ body:
     id: actual
     attributes:
       label: Actual behaviour
-      description: Include the exact refusal or allowance text ABG produced, and whether it was a deny or an ask.
+      description: Include the exact refusal or allowance text IEG produced, and whether it was a deny or an ask.
     validations:
       required: true
 

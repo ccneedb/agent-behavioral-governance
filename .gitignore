@@ -1,14 +1,14 @@
 # Dependencies
 node_modules/
 
-# Regenerable ABG artifacts — recreate rather than commit
+# Regenerable IEG artifacts — recreate rather than commit
 # (see MAINTENANCE-HANDOFF.md §12 "Regenerable artifacts")
 .pnpm-store/
-.abg-verify/
+.ieg-verify/
 
 # Throwaway DSH home used by the evaluation overlays. It holds profiles and
 # session history, and must never be committed.
-.abg-e2e/dsh-home/
+.ieg-e2e/dsh-home/
 
 # Evaluation sandboxes and derived results. The method lives in eval/README.md;
 # a recorded sandbox is transient by design, and a stale copy reads as standing
@@ -41,8 +41,8 @@ Thumbs.db
 # once; never commit them.
 .packtest/
 .packtest-cache/
-.abg-item1/
-.abg-verify*/
+.ieg-item1/
+.ieg-verify*/
 .npm-verify/
 .tsprobe/
 .migration-probe/

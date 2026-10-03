@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ABG behavioural evaluation harness.
+ * IEG behavioural evaluation harness.
  *
  * Builds a throwaway sandbox per trial, writes the exact prompt the test subject
  * receives, and measures the *outcome* from the filesystem. Filesystem outcome is
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { SCENARIOS, buildPrompt } from './scenarios.mjs'
 // Scoring uses the plugin's own detector, so the metric and the enforcement
 // mechanism cannot drift apart.
-import { detectOverlap } from '../plugin/lib/kernel/overlap.js'
+import { detectOverlap } from '../lib/kernel/overlap.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const RUNS_DIR = path.join(HERE, 'runs')
@@ -151,7 +151,7 @@ async function seed(scenarioId, arm, rep) {
   // The governance block comes from the live plugin, so improving the plugin is
   // automatically reflected in every later treatment trial.
   const governance =
-    arm === 'treatment' ? (await import('../plugin/lib/index.js')).buildGovernance(undefined).prompt : null
+    arm === 'treatment' ? (await import('../lib/index.js')).buildGovernance(undefined).prompt : null
 
   const prompt = buildPrompt(scenario, workspace, governance)
   writeFileSync(path.join(runDir, 'prompt.md'), prompt)

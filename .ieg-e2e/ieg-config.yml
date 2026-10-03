@@ -1,0 +1,24 @@
+# E2E verification overlay: isolates IEG's own gates.
+#
+# `policy: allow` disables the generic mutation policy so only the two new
+# mechanisms can fire — the orientation requirement and the overlap gate. A
+# patch replaces a row's whole config, so every field is restated.
+- id: ieg
+  config:
+    enabled: true
+    sectionOrder: 8500
+    workspace:
+      policy: allow
+      overlapCheck: deny
+      mutatingTools:
+        - write
+        - edit
+        - str_replace_editor
+      protectedPaths: []
+    preStep:
+      orientationGate: off
+      # Deliberate opt-in: the shipped default is false (ARCHITECTURE-SPEC §34.2
+      # Q1). The treatment arm arms the requirement explicitly so OBJ-1 is
+      # measured rather than assumed.
+      requireBeforeMutation: true
+    diagnostics: true

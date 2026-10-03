@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# check-install.sh — is ABG installed into a DSH profile, and will it load?
+# check-install.sh — is IEG installed into a DSH profile, and will it load?
 #
 # Answers the question a volunteer actually has after `dsh plugin add`: "the
 # plugin list does not show it and I cannot tell whether it is running." DSH
@@ -12,13 +12,14 @@
 #         ./scripts/check-install.sh            # uses $DSH_PROFILE, else 'web'
 # Env:    DSH_BIN (default: dsh), DSH_HOME (default: ~/.dsh)
 #
-# It also reports which other profiles already have ABG installed, because DSH
+# It also reports which other profiles already have IEG installed, because DSH
 # lists the bundles of the profile you RUN: installing into one profile and
 # running another looks exactly like a failed install.
 #
-# Inspect the running profile from the terminal with `abg status` (control state,
-# generation, PROMPT_VERSION, and whether the row composes); `abg pause` /
-# `abg start` / `abg exit` switch governance without touching the installation.
+# Inspect the running profile from the terminal with `dsh-ieg status` (control
+# state, generation, PROMPT_VERSION, and whether the row composes); `dsh-ieg pause`
+# / `dsh-ieg start` / `dsh-ieg exit` switch governance without touching the
+# installation.
 #
 # Read-only with one caveat: `dsh --dump-config` materialises a temporary
 # `cordis.yml` inside the profile directory, so that directory must be writable
@@ -33,7 +34,7 @@ set -uo pipefail
 
 DSH_BIN="${DSH_BIN:-dsh}"
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-PACKAGE="dsh-agent-behavioral-governance"
+PACKAGE="dsh-information-environment-governance"
 PROFILE="${1:-${DSH_PROFILE:-web}}"
 PROFILE_DIR="${DSH_HOME}/profiles/${PROFILE}"
 INSTALLED_MANIFEST="${PROFILE_DIR}/node_modules/${PACKAGE}/package.json"
@@ -44,7 +45,7 @@ if ! command -v "$DSH_BIN" >/dev/null 2>&1; then
   exit 2
 fi
 
-printf 'ABG install check\n'
+printf 'IEG install check\n'
 printf '  profile    %s\n' "$PROFILE"
 printf '  DSH_HOME   %s\n' "$DSH_HOME"
 printf '\n'
@@ -60,7 +61,7 @@ if [ ! -d "$PROFILE_DIR" ]; then
   printf '\n  Profiles present:\n'
   ls -1 "${DSH_HOME}/profiles" 2>/dev/null | sed 's/^/    /' || printf '    (none)\n'
   printf '\nVERDICT: NOT INSTALLED — no such profile. Install into one, e.g.:\n'
-  printf '  %s plugin --profile abg-test add "<package reference>"\n' "$DSH_BIN"
+  printf '  %s plugin --profile ieg-test add "<package reference>"\n' "$DSH_BIN"
   exit 1
 fi
 printf '  [ok] profile directory exists\n'
@@ -82,17 +83,17 @@ else
   printf '  [x]  not referenced by the profile manifest\n'
 fi
 
-# 3. The decisive check: does the composed tree contain the abg row?
+# 3. The decisive check: does the composed tree contain the ieg row?
 DUMP="$(mktemp)"
 DUMP_ERR="$(mktemp)"
 if "$DSH_BIN" --profile "$PROFILE" --dump-config >"$DUMP" 2>"$DUMP_ERR"; then
-  if grep -q 'id: abg' "$DUMP" && grep -q "name: ${PACKAGE}" "$DUMP"; then
+  if grep -q 'id: ieg' "$DUMP" && grep -q "name: ${PACKAGE}" "$DUMP"; then
     composes=yes
-    order="$(grep -A6 'id: abg' "$DUMP" | grep -m1 'sectionOrder' | sed 's/.*: *//')"
-    printf '  [ok] the abg row composes into the profile tree (sectionOrder %s)\n' "${order:-?}"
+    order="$(grep -A6 'id: ieg' "$DUMP" | grep -m1 'sectionOrder' | sed 's/.*: *//')"
+    printf '  [ok] the ieg row composes into the profile tree (sectionOrder %s)\n' "${order:-?}"
   else
     composes=no
-    printf '  [x]  no abg row in the composed tree\n'
+    printf '  [x]  no ieg row in the composed tree\n'
   fi
 else
   if grep -qE 'EROFS|EACCES|read-only file system|permission denied' "$DUMP_ERR"; then
@@ -108,7 +109,7 @@ else
 fi
 rm -f "$DUMP" "$DUMP_ERR"
 
-# 4. Which other profiles already have ABG installed?
+# 4. Which other profiles already have IEG installed?
 sibling_installed=''
 for dir in "${PROFILES_DIR}"/*/; do
   [ -d "$dir" ] || continue
@@ -118,16 +119,16 @@ for dir in "${PROFILES_DIR}"/*/; do
   sibling_installed="${sibling_installed}${name} "
 done
 if [ -n "$sibling_installed" ]; then
-  printf '  [i]  ABG is also installed in: %s\n' "$sibling_installed"
+  printf '  [i]  IEG is also installed in: %s\n' "$sibling_installed"
 fi
 
 printf '\n'
 if [ "$installed" = "yes" ] && [ "$composes" = "yes" ]; then
-  printf 'VERDICT: ABG WILL LOAD in profile "%s".\n' "$PROFILE"
+  printf 'VERDICT: IEG WILL LOAD in profile "%s".\n' "$PROFILE"
   printf '  Inspect it from a Debian shell:\n'
-  printf '    abg status --profile %s\n' "$PROFILE"
-  printf '  `abg pause` / `abg start` switch governance for that profile without\n'
-  printf '  touching the installation; `abg exit` switches it off.\n'
+  printf '    dsh-ieg status --profile %s\n' "$PROFILE"
+  printf '  `dsh-ieg pause` / `dsh-ieg start` switch governance for that profile without\n'
+  printf '  touching the installation; `dsh-ieg exit` switches it off.\n'
   printf '  DSH lists the bundles of the profile you RUN, so installing into one profile\n'
   printf '  while running another looks exactly like a failed install.\n'
   exit 0
@@ -137,7 +138,7 @@ if [ "$installed" = "yes" ] && [ "$composes" = "unknown" ]; then
   printf 'VERDICT: INSTALLED AND REFERENCED in profile "%s"; composition UNVERIFIED.\n' "$PROFILE"
   printf '  The package is on disk and named by the profile manifest, so it should\n'
   printf '  mount. Re-run this script where that profile directory is writable to\n'
-  printf '  confirm the composed tree, or boot the profile and call `abg_status`:\n'
+  printf '  confirm the composed tree, or boot the profile and call `ieg_status`:\n'
   printf '    %s --profile %s "<task>"\n' "$DSH_BIN" "$PROFILE"
   exit 3
 fi
@@ -146,7 +147,7 @@ if [ "$installed" = "no" ] && [ "$referenced" = "no" ]; then
   printf 'VERDICT: NOT INSTALLED in profile "%s".\n' "$PROFILE"
   printf '    %s plugin --profile %s add "<package reference>"\n' "$DSH_BIN" "$PROFILE"
   if [ -n "$sibling_installed" ]; then
-    printf '  Note: it IS installed in %s — if you are running one of those, ABG is\n' "$sibling_installed"
+    printf '  Note: it IS installed in %s — if you are running one of those, IEG is\n' "$sibling_installed"
     printf '  already active there and this profile is simply a different one.\n'
   fi
   exit 1

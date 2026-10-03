@@ -1,10 +1,12 @@
 name: Release artifact
 
 # Builds the canonical npm tarball with `npm pack` and attaches it to the
-# GitHub release, so a volunteer can install ABG with no git clone:
+# GitHub release, so a volunteer can install IEG with no git clone:
 #
-#   dsh plugin --profile abg-test add \
-#     "https://github.com/ccneedb/agent-behavioral-governance/releases/download/v0.5.0/dsh-agent-behavioral-governance-0.5.0.tgz"
+#   dsh-ieg install --profile ieg-test --from \
+#     "https://github.com/ccneedb/information-environment-governance/releases/download/v0.7.0/dsh-information-environment-governance-0.7.0.tgz"
+#
+# (or the equivalent `dsh plugin --profile ieg-test add "<tarball url>"`).
 #
 # Publication to the **npm registry is NOT performed and NOT authorised**: the
 # package stays `"private": true` until the model-backed gates pass and the
@@ -49,33 +51,29 @@ jobs:
         run: npm install --global typescript
 
       - name: Build the generated sources
-        working-directory: plugin
         run: npm run build
 
       # `prepack` asserts the required artifacts are present, so a broken or
       # unbuilt tree fails here rather than shipping a tarball that cannot mount.
       - name: Pack the npm tarball
         id: pack
-        working-directory: plugin
         run: |
           npm pack
-          TARBALL="$(ls -1 dsh-agent-behavioral-governance-*.tgz | head -1)"
+          TARBALL="$(ls -1 dsh-information-environment-governance-*.tgz | head -1)"
           test -n "$TARBALL" || { echo "npm pack produced no tarball"; exit 1; }
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           sha256sum "$TARBALL" > "$TARBALL.sha256"
           echo "sha256: $(cat "$TARBALL.sha256")"
 
       - name: Assert the tarball carries the mountable plugin
-        working-directory: plugin
         run: |
           TARBALL="${{ steps.pack.outputs.tarball }}"
-          for f in package/lib/index.js package/lib/generated/kernel/prompt-compiler.js package/cordis.patch.yml package/package.json; do
+          for f in package/lib/index.js package/lib/kernel/prompt-compiler.js package/cordis.patch.yml package/package.json; do
             tar tzf "$TARBALL" | grep -qx "$f" || { echo "missing from tarball: $f"; exit 1; }
           done
           echo "tarball contents verified"
 
       - name: Attach the tarball and its checksum to the release
-        working-directory: plugin
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -85,6 +83,6 @@ jobs:
             gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" --clobber
           else
             gh release create "$TAG" "$TARBALL" "$TARBALL.sha256" \
-              --title "agent-behavioral-governance $TAG" --generate-notes
+              --title "information-environment-governance $TAG" --generate-notes
           fi
           echo "attached $TARBALL to release $TAG"

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * End-to-end evaluation: a real DSH agent, ABG installed into a throwaway
+ * End-to-end evaluation: a real DSH agent, IEG installed into a throwaway
  * profile, run against seeded sandboxes.
  *
  * This is the only harness that exercises the **plugin** rather than the prompt.
- * The two arms differ solely in whether ABG is enabled in the composition:
+ * The two arms differ solely in whether IEG is enabled in the composition:
  *
- *   treatment  --patch .abg-e2e/abg-config.yml   (ABG enabled, its gates active)
- *   control    --patch .abg-e2e/abg-off.yml      (same profile, ABG disabled)
+ *   treatment  --patch .ieg-e2e/ieg-config.yml   (IEG enabled, its gates active)
+ *   control    --patch .ieg-e2e/ieg-off.yml      (same profile, IEG disabled)
  *
  * Usage: node eval/e2e.mjs [reps] [scenario ...]
  */
@@ -22,7 +22,7 @@ import { SCENARIOS } from './scenarios.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(HERE, '..')
-const HOME = path.join(REPO, '.abg-e2e', 'dsh-home')
+const HOME = path.join(REPO, '.ieg-e2e', 'dsh-home')
 const SESSIONS = path.join(HOME, 'sessions')
 
 const REPS = Number(process.argv[2] ?? 3)
@@ -32,8 +32,8 @@ const SCENARIO_IDS = process.argv.slice(3).length > 0 ? process.argv.slice(3) : 
 const REP_BASE = 10
 
 const ARMS = [
-  { arm: 'treatment', patch: path.join(REPO, '.abg-e2e', 'abg-config.yml'), abg: true },
-  { arm: 'control', patch: path.join(REPO, '.abg-e2e', 'abg-off.yml'), abg: false },
+  { arm: 'treatment', patch: path.join(REPO, '.ieg-e2e', 'ieg-config.yml'), ieg: true },
+  { arm: 'control', patch: path.join(REPO, '.ieg-e2e', 'ieg-off.yml'), ieg: false },
 ]
 
 const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
@@ -142,15 +142,8 @@ function run(command, args, cwd) {
 // installed. That happened once here: a re-run intended to validate a detector
 // fix actually measured the pre-fix build and produced a misleading result.
 console.log('re-installing the plugin so the profile runs the current source')
-const install = run('dsh', ['plugin', '--profile', 'abge2e', 'add', `file:${path.join(REPO, 'plugin')}`], REPO)
+const install = run('dsh', ['plugin', '--profile', 'iege2e', 'add', `file:${REPO}`], REPO)
 if (install.status !== 0) console.warn(`  install reported ${install.status}: ${install.stderr.slice(0, 300)}`)
-
-// The scripted answerer is what makes `ask_user_question` reachable in a
-// headless composition, so question-batching (Gate D) is measurable at all.
-// It is mounted in BOTH arms: it is part of the harness, not of the treatment.
-console.log('re-installing the evaluation answerer so user questions can be answered')
-const answerer = run('dsh', ['plugin', '--profile', 'abge2e', 'add', `file:${path.join(REPO, 'eval', 'answerer')}`], REPO)
-if (answerer.status !== 0) console.warn(`  answerer install reported ${answerer.status}: ${answerer.stderr.slice(0, 300)}`)
 
 /** @type {any[]} */
 const results = []
@@ -159,7 +152,7 @@ for (const scenarioId of SCENARIO_IDS) {
   const scenario = SCENARIOS[scenarioId]
   if (scenario === undefined) throw new Error(`unknown scenario "${scenarioId}"`)
 
-  for (const { arm, patch, abg } of ARMS) {
+  for (const { arm, patch, ieg } of ARMS) {
     for (let rep = 1; rep <= REPS; rep += 1) {
       const runRep = REP_BASE + rep
       const seeded = run('node', ['eval/harness.mjs', 'seed', scenarioId, arm, String(runRep)], REPO)
@@ -171,7 +164,7 @@ for (const scenarioId of SCENARIO_IDS) {
       const workspace = path.join(REPO, 'eval', 'runs', runId, 'workspace')
 
       const started = Date.now()
-      const boot = run('dsh', ['--profile', 'abge2e', '--patch', patch, scenario.task], workspace)
+      const boot = run('dsh', ['--profile', 'iege2e', '--patch', patch, scenario.task], workspace)
       const elapsedMs = Date.now() - started
 
       const measured = run('node', ['eval/harness.mjs', 'measure', runId], REPO)
@@ -188,7 +181,7 @@ for (const scenarioId of SCENARIO_IDS) {
         scenario: scenarioId,
         objective: scenario.objective,
         arm,
-        abg,
+        ieg,
         rep,
         runId,
         exitStatus: boot.status,

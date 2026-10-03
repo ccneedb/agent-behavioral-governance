@@ -17,7 +17,7 @@
 
 - [ ] No injected model-facing text changed (`PROMPT_VERSION` unchanged)
 - [ ] Compiled prompt text changed → `PROMPT_VERSION` bumped and
-      `plugin/CHANGELOG.md` names the problem or evaluation result that motivated it
+      `CHANGELOG.md` names the problem or evaluation result that motivated it
 - [ ] Durable record shape changed → `DOMAIN_VERSION` decision recorded
 
 ## Documentation
@@ -28,7 +28,8 @@
       carries `owner` and `last_reviewed` front matter
 - [ ] Content that belongs to another document's single source of truth is a link,
       not a restatement (`docs/DOCUMENTATION-INDEX.md`)
-- [ ] No `child-agent-lifecycle` or other withdrawn identifier was reintroduced
+- [ ] No `child-agent-lifecycle`, `user-attention`, or other withdrawn/removed
+      identifier was reintroduced
 - [ ] Regenerable artifacts and credentials are not part of this change
 
 ## Notes for the reviewer

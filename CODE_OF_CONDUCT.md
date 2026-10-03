@@ -1,6 +1,6 @@
 ---
 doc_type: code-of-conduct
-project: agent-behavioral-governance
+project: information-environment-governance
 version: 2.1.0
 status: active
 owner: maintainers
